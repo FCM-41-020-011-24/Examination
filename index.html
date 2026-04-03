@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Apex Villa — VR Experience</title>
+
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400&display=swap" rel="stylesheet"/>
+
+  <style>
+    body { margin:0; overflow:hidden; background:#000; }
+
+    #hud {
+      position:fixed; bottom:28px; left:50%; transform:translateX(-50%);
+      z-index:999; display:flex; gap:20px; pointer-events:none;
+      font-family:'Montserrat',sans-serif;
+    }
+    .hud-pill {
+      background:rgba(8,11,15,0.75); border:1px solid rgba(201,168,76,0.3);
+      color:rgba(201,168,76,0.85); font-size:9px; letter-spacing:0.3em;
+      text-transform:uppercase; padding:7px 16px; backdrop-filter:blur(8px);
+    }
+    #back-btn {
+      position:fixed; top:28px; left:32px; z-index:999;
+      background:rgba(8,11,15,0.75); border:1px solid rgba(201,168,76,0.3);
+      color:rgba(201,168,76,0.85); font-family:'Montserrat',sans-serif;
+      font-size:9px; letter-spacing:0.3em; text-transform:uppercase;
+      padding:10px 20px; cursor:pointer; backdrop-filter:blur(8px);
+      text-decoration:none; transition:border-color .3s,color .3s;
+    }
+    #back-btn:hover { border-color:rgba(201,168,76,0.9); color:#e8c96d; }
+    #room-label {
+      position:fixed; top:28px; right:32px; z-index:999;
+      background:rgba(8,11,15,0.75); border:1px solid rgba(201,168,76,0.3);
+      color:rgba(201,168,76,0.85); font-family:'Montserrat',sans-serif;
+      font-size:9px; letter-spacing:0.3em; text-transform:uppercase;
+      padding:10px 20px; backdrop-filter:blur(8px);
+    }
+    #floor-nav {
+      position:fixed; bottom:75px; right:32px; z-index:999;
+      display:flex; flex-direction:column; gap:8px;
+    }
+    .floor-btn {
+      background:rgba(8,11,15,0.75); border:1px solid rgba(201,168,76,0.3);
+      color:rgba(201,168,76,0.85); font-family:'Montserrat',sans-serif;
+      font-size:9px; letter-spacing:0.3em; text-transform:uppercase;
+      padding:9px 18px; cursor:pointer; backdrop-filter:blur(8px);
+      pointer-events:all; transition:border-color .3s,color .3s;
+    }
+    .floor-btn:hover  { border-color:rgba(201,168,76,0.9); color:#e8c96d; }
+    .floor-btn.active { border-color:rgba(201,168,76,0.9); color:#e8c96d; background:rgba(201,168,76,0.15); }
+  </style>
+</head>
+<body>
+
+  <a href="index.html" id="back-btn">← Back</a>
+  <div id="room-label">Exterior</div>
+  <div id="hud">
+    <div class="hud-pill">WASD — Move</div>
+    <div class="hud-pill">Mouse — Look</div>
+    <div class="hud-pill">Click — Lock</div>
+  </div>
+  <div id="floor-nav">
+    <button class="floor-btn" id="btn-f2">▲ Floor 2</button>
+    <button class="floor-btn" id="btn-f1">▲ Floor 1</button>
+    <button class="floor-btn active" id="btn-f0">▼ Ground</button>
+  </div>
+
+  <a-scene
+    fog="type:linear; color:#0a0e14; near:60; far:180"
+    renderer="antialias:true; colorManagement:true; physicallyCorrectLights:true"
+    shadow="type:pcfsoft"
+    vr-mode-ui="enabled:true"
+  >
+
+    <!-- ASSETS -->
+    <a-assets timeout="60000">
+      <img id="tex-concrete" src="assets/textures/concrete.jpg" crossorigin="anonymous"/>
+      <img id="tex-marble"   src="assets/textures/marble.jpg"   crossorigin="anonymous"/>
+      <img id="tex-wood"     src="assets/textures/wood.jpg"     crossorigin="anonymous"/>
+      <img id="tex-grass"    src="assets/textures/grass.jpg"    crossorigin="anonymous"/>
+      <img id="tex-tiles"    src="assets/textures/tiles.jpg"    crossorigin="anonymous"/>
+      <img id="tex-roof"     src="assets/textures/roof.jpg"     crossorigin="anonymous"/>
+      <a-asset-item id="model-tree" src="assets/models/tree.glb"></a-asset-item>
+      <a-asset-item id="model-palm" src="assets/models/palm.glb"></a-asset-item>
+    </a-assets>
+
+    <!-- PLAYER -->
+    <a-entity id="player" position="0 1.6 30" room-label>
+      <a-camera
+        look-controls="pointerLockEnabled:true; reverseMouseDrag:false"
+        wasd-controls="enabled:true; acceleration:28"
+        fov="75"
+      >
+        <a-ring color="#c9a84c" radius-inner="0.003" radius-outer="0.006"
+                position="0 0 -0.5" opacity="0.6"></a-ring>
+      </a-camera>
+    </a-entity>
+
+    <!-- LIGHTING -->
+    <a-light type="ambient"     color="#2a3a4a" intensity="1.2"></a-light>
+    <a-light type="directional" color="#b8cce8" intensity="1.2"
+             position="-10 20 -10" cast-shadow="true"
+             shadow-camera-left="-60" shadow-camera-right="60"
+             shadow-camera-top="60" shadow-camera-bottom="-60"></a-light>
+
+    <a-light type="point" color="#f5c87a" intensity="2.8" position="0 3.5 0"    distance="28"></a-light>
+    <a-light type="point" color="#f5c87a" intensity="2.2" position="-7 3.5 0"   distance="22"></a-light>
+    <a-light type="point" color="#f5c87a" intensity="2.2" position="7 3.5 0"    distance="22"></a-light>
+    <a-light type="point" color="#f5e8c0" intensity="2.2" position="-3 8.5 -2"  distance="22"></a-light>
+    <a-light type="point" color="#f5e8c0" intensity="2.0" position="5 8.5 -2"   distance="20"></a-light>
+    <a-light type="point" color="#f5e0b0" intensity="2.0" position="0 13.5 0"   distance="22"></a-light>
+    <a-light type="point" color="#00aaff" intensity="1.5" position="0 0.5 14"   distance="14"></a-light>
+    <a-light type="point" color="#ff6600" intensity="1.8" position="0 1 24"     distance="10"
+      animation="property:intensity; from:1.2; to:2.5; dur:400; dir:alternate; loop:true"></a-light>
+    <a-light type="point" color="#fff5e0" intensity="1.5" position="14 3 3"     distance="12"></a-light>
+
+    <!-- SKY + STARS -->
+    <a-sky color="#0a0e1a"></a-sky>
+    <a-sphere color="#fff" radius="0.08" position="20 25 -40"  emissive="#fff" emissive-intensity="1"></a-sphere>
+    <a-sphere color="#fff" radius="0.06" position="-30 30 -50" emissive="#fff" emissive-intensity="1"></a-sphere>
+    <a-sphere color="#fff" radius="0.07" position="10 28 -45"  emissive="#fff" emissive-intensity="1"></a-sphere>
+    <a-sphere color="#fff" radius="0.05" position="-15 22 -38" emissive="#fff" emissive-intensity="1"></a-sphere>
+    <a-sphere color="#fff" radius="0.09" position="35 26 -42"  emissive="#fff" emissive-intensity="1"></a-sphere>
+    <a-sphere color="#fff" radius="0.06" position="-25 35 -48" emissive="#fff" emissive-intensity="1"></a-sphere>
+    <a-sphere color="#fff" radius="0.07" position="5 32 -55"   emissive="#fff" emissive-intensity="1"></a-sphere>
+    <a-sphere color="#fff" radius="0.05" position="50 28 -60"  emissive="#fff" emissive-intensity="1"></a-sphere>
+    <a-sphere color="#fff" radius="0.06" position="-50 24 -55" emissive="#fff" emissive-intensity="1"></a-sphere>
+
+    <!-- GROUND -->
+    <a-plane src="#tex-grass"  width="260" height="260" rotation="-90 0 0"
+             position="0 0 -30" repeat="36 36" shadow="receive:true" roughness="1"></a-plane>
+    <a-plane src="#tex-tiles"  width="34"  height="30"  rotation="-90 0 0"
+             position="0 0.01 0" repeat="8 7" shadow="receive:true"></a-plane>
+
+    <!-- ROAD SYSTEM -->
+    <a-plane color="#2a2a2a" width="12" height="160" rotation="-90 0 0"
+             position="-38 0.02 -20" roughness="0.9"></a-plane>
+    <a-plane color="#f5c842" width="0.3" height="8" rotation="-90 0 0" position="-38 0.025 -60" opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="0.3" height="8" rotation="-90 0 0" position="-38 0.025 -44" opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="0.3" height="8" rotation="-90 0 0" position="-38 0.025 -28" opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="0.3" height="8" rotation="-90 0 0" position="-38 0.025 -12" opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="0.3" height="8" rotation="-90 0 0" position="-38 0.025  4"  opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="0.3" height="8" rotation="-90 0 0" position="-38 0.025  20" opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="0.3" height="8" rotation="-90 0 0" position="-38 0.025  36" opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="0.3" height="8" rotation="-90 0 0" position="-38 0.025  52" opacity="0.8" transparent="true"></a-plane>
+    <a-box color="#444" width="0.5" height="0.15" depth="160" position="-32.25 0.075 -20" roughness="0.8"></a-box>
+    <a-box color="#444" width="0.5" height="0.15" depth="160" position="-43.75 0.075 -20" roughness="0.8"></a-box>
+
+    <a-plane color="#2a2a2a" width="160" height="12" rotation="-90 0 0"
+             position="0 0.02 -48" roughness="0.9"></a-plane>
+    <a-plane color="#f5c842" width="8" height="0.3" rotation="-90 0 0" position="-60 0.025 -48" opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="8" height="0.3" rotation="-90 0 0" position="-44 0.025 -48" opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="8" height="0.3" rotation="-90 0 0" position="-28 0.025 -48" opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="8" height="0.3" rotation="-90 0 0" position="-12 0.025 -48" opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="8" height="0.3" rotation="-90 0 0" position="4 0.025 -48"   opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="8" height="0.3" rotation="-90 0 0" position="20 0.025 -48"  opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="8" height="0.3" rotation="-90 0 0" position="36 0.025 -48"  opacity="0.8" transparent="true"></a-plane>
+    <a-plane color="#f5c842" width="8" height="0.3" rotation="-90 0 0" position="52 0.025 -48"  opacity="0.8" transparent="true"></a-plane>
+    <a-box color="#444" width="160" height="0.15" depth="0.5" position="0 0.075 -42.25" roughness="0.8"></a-box>
+    <a-box color="#444" width="160" height="0.15" depth="0.5" position="0 0.075 -53.75" roughness="0.8"></a-box>
+
+    <a-plane color="#888" width="4" height="160" rotation="-90 0 0"
+             position="-30 0.015 -20" roughness="0.8" opacity="0.9" transparent="true"></a-plane>
+
+    <!-- STREET LAMPS -->
+    <a-entity id="lamp1" position="-30 0 -50">
+      <a-cylinder color="#555" radius="0.08" height="6" position="0 3 0" metalness="0.6"></a-cylinder>
+      <a-box color="#444" width="0.12" height="0.12" depth="2.2" position="0 6.1 -1.1" metalness="0.5"></a-box>
+      <a-box color="#fff8d0" width="0.5" height="0.18" depth="0.5" position="0 5.8 -2.1"
+             emissive="#fff8d0" emissive-intensity="0.9"></a-box>
+      <a-light type="point" color="#ffe8a0" intensity="1.2" position="0 5.6 -2.1" distance="16"></a-light>
+    </a-entity>
+    <a-entity id="lamp2" position="-30 0 -20">
+      <a-cylinder color="#555" radius="0.08" height="6" position="0 3 0" metalness="0.6"></a-cylinder>
+      <a-box color="#444" width="0.12" height="0.12" depth="2.2" position="0 6.1 -1.1" metalness="0.5"></a-box>
+      <a-box color="#fff8d0" width="0.5" height="0.18" depth="0.5" position="0 5.8 -2.1"
+             emissive="#fff8d0" emissive-intensity="0.9"></a-box>
+      <a-light type="point" color="#ffe8a0" intensity="1.2" position="0 5.6 -2.1" distance="16"></a-light>
+    </a-entity>
+    <a-entity id="lamp3" position="-30 0 10">
+      <a-cylinder color="#555" radius="0.08" height="6" position="0 3 0" metalness="0.6"></a-cylinder>
+      <a-box color="#444" width="0.12" height="0.12" depth="2.2" position="0 6.1 -1.1" metalness="0.5"></a-box>
+      <a-box color="#fff8d0" width="0.5" height="0.18" depth="0.5" position="0 5.8 -2.1"
+             emissive="#fff8d0" emissive-intensity="0.9"></a-box>
+      <a-light type="point" color="#ffe8a0" intensity="1.2" position="0 5.6 -2.1" distance="16"></a-light>
+    </a-entity>
+    <a-entity id="lamp4" position="-30 0 40">
+      <a-cylinder color="#555" radius="0.08" height="6" position="0 3 0" metalness="0.6"></a-cylinder>
+      <a-box color="#444" width="0.12" height="0.12" depth="2.2" position="0 6.1 -1.1" metalness="0.5"></a-box>
+      <a-box color="#fff8d0" width="0.5" height="0.18" depth="0.5" position="0 5.8 -2.1"
+             emissive="#fff8d0" emissive-intensity="0.9"></a-box>
+      <a-light type="point" color="#ffe8a0" intensity="1.0" position="0 5.6 -2.1" distance="14"></a-light>
+    </a-entity>
+    <a-entity id="lamp5" position="-10 0 -42">
+      <a-cylinder color="#555" radius="0.08" height="6" position="0 3 0" metalness="0.6"></a-cylinder>
+      <a-box color="#444" width="2.2" height="0.12" depth="0.12" position="-1.1 6.1 0" metalness="0.5"></a-box>
+      <a-box color="#fff8d0" width="0.5" height="0.18" depth="0.5" position="-2.1 5.8 0"
+             emissive="#fff8d0" emissive-intensity="0.9"></a-box>
+      <a-light type="point" color="#ffe8a0" intensity="1.2" position="-2.1 5.6 0" distance="16"></a-light>
+    </a-entity>
+    <a-entity id="lamp6" position="20 0 -42">
+      <a-cylinder color="#555" radius="0.08" height="6" position="0 3 0" metalness="0.6"></a-cylinder>
+      <a-box color="#444" width="2.2" height="0.12" depth="0.12" position="-1.1 6.1 0" metalness="0.5"></a-box>
+      <a-box color="#fff8d0" width="0.5" height="0.18" depth="0.5" position="-2.1 5.8 0"
+             emissive="#fff8d0" emissive-intensity="0.9"></a-box>
+      <a-light type="point" color="#ffe8a0" intensity="1.2" position="-2.1 5.6 0" distance="16"></a-light>
+    </a-entity>
+    <a-entity id="lamp7" position="50 0 -42">
+      <a-cylinder color="#555" radius="0.08" height="6" position="0 3 0" metalness="0.6"></a-cylinder>
+      <a-box color="#444" width="2.2" height="0.12" depth="0.12" position="-1.1 6.1 0" metalness="0.5"></a-box>
+      <a-box color="#fff8d0" width="0.5" height="0.18" depth="0.5" position="-2.1 5.8 0"
+             emissive="#fff8d0" emissive-intensity="0.9"></a-box>
+      <a-light type="point" color="#ffe8a0" intensity="1.0" position="-2.1 5.6 0" distance="14"></a-light>
+    </a-entity>
+
+    <!-- NEIGHBOURING HOUSES -->
+    <a-entity id="house-a" position="-55 0 -15">
+      <a-box color="#b8a898" width="14" height="6" depth="10" position="0 3 0" roughness="0.9" shadow="cast:true"></a-box>
+      <a-box color="#7a5c3a" width="16" height="0.5" depth="12" position="0 6.25 0" roughness="0.8"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="2" height="1.5" depth="0.12" position="-4 3.2 5.07" transparent="true" metalness="0.8"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="2" height="1.5" depth="0.12" position="4 3.2 5.07" transparent="true" metalness="0.8"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="2" height="1.5" depth="0.12" position="0 3.2 5.07" transparent="true" metalness="0.8"></a-box>
+      <a-box color="#555" width="2.1" height="0.08" depth="0.14" position="-4 4.0 5.07"></a-box>
+      <a-box color="#555" width="2.1" height="0.08" depth="0.14" position="-4 2.45 5.07"></a-box>
+      <a-box color="#555" width="2.1" height="0.08" depth="0.14" position="4 4.0 5.07"></a-box>
+      <a-box color="#555" width="2.1" height="0.08" depth="0.14" position="4 2.45 5.07"></a-box>
+      <a-box color="#5c3d1e" width="1.4" height="2.5" depth="0.12" position="0 1.25 5.07" roughness="0.6"></a-box>
+      <a-light type="point" color="#ffe0a0" intensity="0.6" position="-4 3.2 4.5" distance="5"></a-light>
+      <a-light type="point" color="#ffe0a0" intensity="0.6" position="4 3.2 4.5" distance="5"></a-light>
+      <a-plane color="#3a3a3a" width="4" height="8" rotation="-90 0 0" position="0 0.015 9.5" roughness="0.9"></a-plane>
+    </a-entity>
+
+    <a-entity id="house-b" position="-55 0 -55">
+      <a-box color="#8a9a8a" width="12" height="5.5" depth="9" position="0 2.75 0" roughness="0.9" shadow="cast:true"></a-box>
+      <a-box color="#5a4a3a" width="13" height="0.5" depth="10" position="0 5.75 0" roughness="0.8"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="1.8" height="1.4" depth="0.12" position="-3 2.8 4.57" transparent="true" metalness="0.8"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="1.8" height="1.4" depth="0.12" position="3 2.8 4.57" transparent="true" metalness="0.8"></a-box>
+      <a-box color="#5c3d1e" width="1.3" height="2.3" depth="0.12" position="0 1.15 4.57" roughness="0.6"></a-box>
+      <a-light type="point" color="#ffe0a0" intensity="0.5" position="0 2.5 4" distance="5"></a-light>
+      <a-plane color="#3a3a3a" width="4" height="6" rotation="-90 0 0" position="0 0.015 8.5" roughness="0.9"></a-plane>
+    </a-entity>
+
+    <a-entity id="house-c" position="42 0 -20">
+      <a-box color="#c0a888" width="16" height="6.5" depth="11" position="0 3.25 0" roughness="0.9" shadow="cast:true"></a-box>
+      <a-box color="#8a6040" width="17" height="0.6" depth="12" position="0 6.8 0" roughness="0.8"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="2.2" height="1.6" depth="0.12" position="-5 3.5 5.57" transparent="true" metalness="0.8"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="2.2" height="1.6" depth="0.12" position="0 3.5 5.57" transparent="true" metalness="0.8"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="2.2" height="1.6" depth="0.12" position="5 3.5 5.57" transparent="true" metalness="0.8"></a-box>
+      <a-box color="#5c3d1e" width="1.5" height="2.8" depth="0.12" position="-2.5 1.4 5.57" roughness="0.6"></a-box>
+      <a-light type="point" color="#ffe0a0" intensity="0.6" position="-5 3.5 5" distance="6"></a-light>
+      <a-light type="point" color="#ffe0a0" intensity="0.6" position="5 3.5 5" distance="6"></a-light>
+      <a-box color="#3a3a3a" width="4" height="2.8" depth="0.12" position="4.5 1.4 5.57" roughness="0.4" metalness="0.4"></a-box>
+      <a-plane color="#3a3a3a" width="4" height="8" rotation="-90 0 0" position="4.5 0.015 9.5" roughness="0.9"></a-plane>
+    </a-entity>
+
+    <a-entity id="house-d" position="-20 0 -68">
+      <a-box color="#a09080" width="13" height="6" depth="10" position="0 3 0" roughness="0.9" shadow="cast:true"></a-box>
+      <a-box color="#6a4a2a" width="14" height="0.5" depth="11" position="0 6.25 0" roughness="0.8"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="2" height="1.5" depth="0.12" position="-3.5 3.2 5.07" transparent="true" metalness="0.8"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="2" height="1.5" depth="0.12" position="3.5 3.2 5.07" transparent="true" metalness="0.8"></a-box>
+      <a-box color="#5c3d1e" width="1.4" height="2.5" depth="0.12" position="0 1.25 5.07" roughness="0.6"></a-box>
+      <a-light type="point" color="#ffe0a0" intensity="0.5" position="0 3 4.5" distance="5"></a-light>
+    </a-entity>
+
+    <a-entity id="house-e" position="20 0 -68">
+      <a-box color="#9898a8" width="14" height="5.8" depth="10" position="0 2.9 0" roughness="0.9" shadow="cast:true"></a-box>
+      <a-box color="#6a5a4a" width="15" height="0.5" depth="11" position="0 6.15 0" roughness="0.8"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="2" height="1.5" depth="0.12" position="-4 3.2 5.07" transparent="true" metalness="0.8"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="2" height="1.5" depth="0.12" position="4 3.2 5.07" transparent="true" metalness="0.8"></a-box>
+      <a-box color="#5c3d1e" width="1.4" height="2.5" depth="0.12" position="0 1.25 5.07" roughness="0.6"></a-box>
+      <a-light type="point" color="#ffe0a0" intensity="0.5" position="0 3 4.5" distance="5"></a-light>
+    </a-entity>
+
+    <!-- ANIMATED STREET CARS -->
+    <a-entity id="street-car-1" position="-36 0 -80"
+              animation="property:position; from:-36 0 -80; to:-36 0 80; dur:18000; loop:true; easing:linear">
+      <a-box color="#1a3a5a" width="2" height="0.7" depth="4" position="0 0.75 0" roughness="0.3" metalness="0.4" shadow="cast:true"></a-box>
+      <a-box color="#16304a" width="1.7" height="0.55" depth="2.2" position="-0.1 1.4 0.1" roughness="0.3" metalness="0.3"></a-box>
+      <a-box color="#88aabb" opacity="0.45" width="1.55" height="0.45" depth="0.08" position="-0.1 1.5 1.2" transparent="true" metalness="0.9" rotation="0 0 -8"></a-box>
+      <a-box color="#88aabb" opacity="0.4" width="1.55" height="0.4" depth="0.08" position="-0.1 1.5 -1.0" transparent="true" metalness="0.9" rotation="0 0 6"></a-box>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="-1.05 0.38 1.3"  rotation="0 0 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="1.05 0.38 1.3"   rotation="0 0 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="-1.05 0.38 -1.3" rotation="0 0 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="1.05 0.38 -1.3"  rotation="0 0 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#888" radius="0.16" height="0.24" position="-1.05 0.38 1.3"  rotation="0 0 90" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#888" radius="0.16" height="0.24" position="1.05 0.38 1.3"   rotation="0 0 90" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#888" radius="0.16" height="0.24" position="-1.05 0.38 -1.3" rotation="0 0 90" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#888" radius="0.16" height="0.24" position="1.05 0.38 -1.3"  rotation="0 0 90" metalness="0.7"></a-cylinder>
+      <a-box color="#fffde0" width="0.35" height="0.18" depth="0.06" position="-0.65 0.82 2.04" emissive="#fffde0" emissive-intensity="0.8"></a-box>
+      <a-box color="#fffde0" width="0.35" height="0.18" depth="0.06" position="0.65 0.82 2.04" emissive="#fffde0" emissive-intensity="0.8"></a-box>
+      <a-box color="#cc2200" width="0.35" height="0.15" depth="0.06" position="-0.65 0.8 -2.04" emissive="#cc2200" emissive-intensity="0.7"></a-box>
+      <a-box color="#cc2200" width="0.35" height="0.15" depth="0.06" position="0.65 0.8 -2.04" emissive="#cc2200" emissive-intensity="0.7"></a-box>
+    </a-entity>
+
+    <a-entity id="street-car-2" position="-40 0 80"
+              animation="property:position; from:-40 0 80; to:-40 0 -80; dur:22000; loop:true; easing:linear">
+      <a-box color="#3a1a1a" width="2" height="0.7" depth="4" position="0 0.75 0" roughness="0.3" metalness="0.4" shadow="cast:true"></a-box>
+      <a-box color="#301515" width="1.7" height="0.55" depth="2.2" position="0.1 1.4 0" roughness="0.3"></a-box>
+      <a-box color="#88aabb" opacity="0.4" width="1.55" height="0.42" depth="0.08" position="0.1 1.5 1.15" transparent="true" metalness="0.9" rotation="0 0 8"></a-box>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="-1.05 0.38 1.3"  rotation="0 0 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="1.05 0.38 1.3"   rotation="0 0 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="-1.05 0.38 -1.3" rotation="0 0 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="1.05 0.38 -1.3"  rotation="0 0 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#999" radius="0.16" height="0.24" position="-1.05 0.38 1.3"  rotation="0 0 90" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#999" radius="0.16" height="0.24" position="1.05 0.38 1.3"   rotation="0 0 90" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#999" radius="0.16" height="0.24" position="-1.05 0.38 -1.3" rotation="0 0 90" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#999" radius="0.16" height="0.24" position="1.05 0.38 -1.3"  rotation="0 0 90" metalness="0.7"></a-cylinder>
+      <a-box color="#fffde0" width="0.35" height="0.18" depth="0.06" position="-0.65 0.82 2.04" emissive="#fffde0" emissive-intensity="0.8"></a-box>
+      <a-box color="#fffde0" width="0.35" height="0.18" depth="0.06" position="0.65 0.82 2.04" emissive="#fffde0" emissive-intensity="0.8"></a-box>
+      <a-box color="#cc2200" width="0.35" height="0.15" depth="0.06" position="-0.65 0.8 -2.04" emissive="#cc2200" emissive-intensity="0.6"></a-box>
+      <a-box color="#cc2200" width="0.35" height="0.15" depth="0.06" position="0.65 0.8 -2.04" emissive="#cc2200" emissive-intensity="0.6"></a-box>
+    </a-entity>
+
+    <a-entity id="street-car-3" position="-80 0 -46"
+              animation="property:position; from:-80 0 -46; to:80 0 -46; dur:25000; loop:true; easing:linear">
+      <a-box color="#1a3a1a" width="4" height="0.7" depth="2" position="0 0.75 0" roughness="0.3" metalness="0.4" shadow="cast:true"></a-box>
+      <a-box color="#162e16" width="2.8" height="0.55" depth="1.7" position="0.2 1.4 0" roughness="0.3"></a-box>
+      <a-box color="#88aabb" opacity="0.4" width="0.08" height="0.42" depth="1.55" position="1.18 1.5 0" transparent="true" metalness="0.9"></a-box>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="1.3 0.38 -0.9"  rotation="0 90 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="1.3 0.38 0.9"   rotation="0 90 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="-1.3 0.38 -0.9" rotation="0 90 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="-1.3 0.38 0.9"  rotation="0 90 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#777" radius="0.16" height="0.24" position="1.3 0.38 -0.9"  rotation="0 90 90" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#777" radius="0.16" height="0.24" position="1.3 0.38 0.9"   rotation="0 90 90" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#777" radius="0.16" height="0.24" position="-1.3 0.38 -0.9" rotation="0 90 90" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#777" radius="0.16" height="0.24" position="-1.3 0.38 0.9"  rotation="0 90 90" metalness="0.7"></a-cylinder>
+      <a-box color="#fffde0" width="0.06" height="0.18" depth="0.35" position="2.04 0.82 -0.65" emissive="#fffde0" emissive-intensity="0.8"></a-box>
+      <a-box color="#fffde0" width="0.06" height="0.18" depth="0.35" position="2.04 0.82 0.65" emissive="#fffde0" emissive-intensity="0.8"></a-box>
+      <a-box color="#cc2200" width="0.06" height="0.15" depth="0.35" position="-2.04 0.8 -0.65" emissive="#cc2200" emissive-intensity="0.6"></a-box>
+      <a-box color="#cc2200" width="0.06" height="0.15" depth="0.35" position="-2.04 0.8 0.65" emissive="#cc2200" emissive-intensity="0.6"></a-box>
+    </a-entity>
+
+    <a-entity id="street-car-4" position="80 0 -50"
+              animation="property:position; from:80 0 -50; to:-80 0 -50; dur:30000; loop:true; easing:linear">
+      <a-box color="#2a2a4a" width="4" height="0.65" depth="2" position="0 0.725 0" roughness="0.3" metalness="0.4" shadow="cast:true"></a-box>
+      <a-box color="#202040" width="2.6" height="0.52" depth="1.7" position="-0.2 1.37 0" roughness="0.3"></a-box>
+      <a-box color="#88aabb" opacity="0.4" width="0.08" height="0.42" depth="1.5" position="-1.14 1.48 0" transparent="true" metalness="0.9"></a-box>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="1.3 0.38 -0.9"  rotation="0 90 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="1.3 0.38 0.9"   rotation="0 90 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="-1.3 0.38 -0.9" rotation="0 90 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#1a1a1a" radius="0.3" height="0.22" position="-1.3 0.38 0.9"  rotation="0 90 90" roughness="1"></a-cylinder>
+      <a-cylinder color="#aaa" radius="0.16" height="0.24" position="1.3 0.38 -0.9"  rotation="0 90 90" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#aaa" radius="0.16" height="0.24" position="1.3 0.38 0.9"   rotation="0 90 90" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#aaa" radius="0.16" height="0.24" position="-1.3 0.38 -0.9" rotation="0 90 90" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#aaa" radius="0.16" height="0.24" position="-1.3 0.38 0.9"  rotation="0 90 90" metalness="0.7"></a-cylinder>
+      <a-box color="#fffde0" width="0.06" height="0.18" depth="0.35" position="-2.04 0.82 -0.65" emissive="#fffde0" emissive-intensity="0.8"></a-box>
+      <a-box color="#fffde0" width="0.06" height="0.18" depth="0.35" position="-2.04 0.82 0.65" emissive="#fffde0" emissive-intensity="0.8"></a-box>
+      <a-box color="#cc2200" width="0.06" height="0.15" depth="0.35" position="2.04 0.8 -0.65" emissive="#cc2200" emissive-intensity="0.6"></a-box>
+      <a-box color="#cc2200" width="0.06" height="0.15" depth="0.35" position="2.04 0.8 0.65" emissive="#cc2200" emissive-intensity="0.6"></a-box>
+    </a-entity>
+
+    <!-- VILLA STRUCTURE -->
+
+    <!-- GROUND FLOOR SHELL -->
+    <a-entity id="gf-shell">
+      <a-box src="#tex-concrete" width="20" height="4.3" depth="0.3" position="0 2.15 -6"   roughness="0.9" shadow="cast:true"></a-box>
+      <a-box src="#tex-concrete" width="0.3" height="4.3" depth="12"  position="-10 2.15 0"  roughness="0.9" shadow="cast:true"></a-box>
+      <a-box src="#tex-concrete" width="0.3" height="4.3" depth="5"   position="10 2.15 -3.5" roughness="0.9" shadow="cast:true"></a-box>
+      <a-box src="#tex-concrete" width="0.3" height="4.3" depth="4"   position="10 2.15 4"    roughness="0.9" shadow="cast:true"></a-box>
+      <a-box color="#88bbdd" opacity="0.22" width="8"  height="4.3" depth="0.15" position="-4 2.15 6"   transparent="true" metalness="0.9" roughness="0.05"></a-box>
+      <a-box color="#88bbdd" opacity="0.22" width="7"  height="4.3" depth="0.15" position="6.5 2.15 6"  transparent="true" metalness="0.9" roughness="0.05"></a-box>
+      <a-box color="#111" width="0.12" height="4.3" depth="0.2" position="-8 2.15 6"></a-box>
+      <a-box color="#111" width="0.12" height="4.3" depth="0.2" position="-5.5 2.15 6"></a-box>
+      <a-box color="#111" width="0.12" height="4.3" depth="0.2" position="-3 2.15 6"></a-box>
+      <a-box color="#111" width="0.12" height="4.3" depth="0.2" position="0 2.15 6"></a-box>
+      <a-box color="#111" width="0.12" height="4.3" depth="0.2" position="3 2.15 6"></a-box>
+      <a-box color="#111" width="0.12" height="4.3" depth="0.2" position="8 2.15 6"></a-box>
+      <a-box color="#111" width="20" height="0.1" depth="0.2" position="0 2.15 6"></a-box>
+      <a-box src="#tex-concrete" width="20" height="0.3" depth="12" position="0 4.45 0" roughness="0.9"></a-box>
+      <a-plane src="#tex-tiles" width="19.4" height="11.4" rotation="-90 0 0" position="0 0.03 0" repeat="6 4" roughness="0.4"></a-plane>
+    </a-entity>
+
+    <!-- LIVING ROOM -->
+    <a-entity id="living-room" position="-5 0 0">
+      <a-box src="#tex-wood" width="8" height="4.3" depth="0.1" position="0 2.15 -5.85" roughness="0.6"></a-box>
+      <a-box color="#0a0a0a" width="3.2" height="1.8" depth="0.08" position="0 2.0 -5.8"  metalness="0.8"></a-box>
+      <a-box color="#1a3a6a" width="3.0" height="1.65" depth="0.07" position="0 2.0 -5.76" emissive="#1a3a6a" emissive-intensity="0.5"></a-box>
+      <a-box src="#tex-wood" width="3.5" height="0.5" depth="0.5"  position="0 0.35 -5.5" roughness="0.5"></a-box>
+      <a-light type="point" color="#2244aa" intensity="0.4" position="0 2.0 -5.2" distance="5"></a-light>
+      <a-box color="#4a4a4a" width="4.2" height="0.5" depth="1.2" position="0 0.35 1.5"   roughness="0.9" shadow="cast:true"></a-box>
+      <a-box color="#3d3d3d" width="4.2" height="0.7" depth="0.2" position="0 0.85 2.05"  roughness="0.9"></a-box>
+      <a-box color="#4a4a4a" width="1.2" height="0.5" depth="2.6" position="2.7 0.35 -0.1" roughness="0.9" shadow="cast:true"></a-box>
+      <a-box color="#3d3d3d" width="0.2" height="0.6" depth="2.6" position="3.3 0.85 -0.1" roughness="0.9"></a-box>
+      <a-box color="#8b6f47" width="0.4" height="0.35" depth="0.08" position="-1.6 0.8 1.95" rotation="0 0 15"></a-box>
+      <a-box color="#6b8b6f" width="0.4" height="0.35" depth="0.08" position="1.5 0.8 1.95"  rotation="0 0 -10"></a-box>
+      <a-box color="#88bbdd" opacity="0.4" width="1.8" height="0.06" depth="1.0" position="0 0.52 0.2" transparent="true" metalness="0.9" roughness="0.05"></a-box>
+      <a-box color="#c9a84c" width="0.06" height="0.5" depth="0.06" position="-0.8 0.25 -0.2" metalness="0.8"></a-box>
+      <a-box color="#c9a84c" width="0.06" height="0.5" depth="0.06" position="0.8 0.25 -0.2"  metalness="0.8"></a-box>
+      <a-box color="#c9a84c" width="0.06" height="0.5" depth="0.06" position="-0.8 0.25 0.6"  metalness="0.8"></a-box>
+      <a-box color="#c9a84c" width="0.06" height="0.5" depth="0.06" position="0.8 0.25 0.6"   metalness="0.8"></a-box>
+      <a-plane color="#3d2b1f" width="5.2" height="4.2" rotation="-90 0 0" position="0 0.03 -0.5"></a-plane>
+      <a-plane color="#6b4c3b" width="4.8" height="3.8" rotation="-90 0 0" position="0 0.035 -0.5"></a-plane>
+      <a-cylinder color="#222" radius="0.02" height="1.2" position="0 3.7 -1"></a-cylinder>
+      <a-cone color="#c9a84c" radius-bottom="0.35" radius-top="0.15" height="0.4"
+              position="0 3.05 -1" metalness="0.7" emissive="#c9a84c" emissive-intensity="0.3"></a-cone>
+      <a-sphere color="#fff5c0" radius="0.08" position="0 3.12 -1" emissive="#fff5c0" emissive-intensity="1"></a-sphere>
+      <a-light type="point" color="#ffebb0" intensity="1.2" position="0 3.05 -1" distance="8"></a-light>
+      <a-cylinder color="#2d1a0a" radius="0.22" height="0.55" position="3.5 0.275 -4.5" roughness="1"></a-cylinder>
+      <a-sphere   color="#1a4a1a" radius="0.55"               position="3.5 1.05 -4.5"  roughness="1"
+        animation="property:scale; from:1 1 1; to:1.02 1.04 1.02; dur:3000; dir:alternate; loop:true"></a-sphere>
+      <a-sphere   color="#2d6b2d" radius="0.4"                position="3.2 1.3 -4.2"   roughness="1"></a-sphere>
+    </a-entity>
+
+    <!-- KITCHEN + DINING -->
+    <a-entity id="kitchen" position="5 0 -1">
+      <a-box color="#e8e4dc" width="8" height="4.3" depth="0.1" position="0 2.15 -4.85" roughness="0.8"></a-box>
+      <a-box color="#f0ece4" width="7" height="0.95" depth="0.65" position="0 0.475 -4.57" roughness="0.5" shadow="cast:true"></a-box>
+      <a-box src="#tex-marble" width="7.1" height="0.07" depth="0.7" position="0 0.965 -4.55" roughness="0.1"></a-box>
+      <a-box color="#f0ece4" width="7" height="0.9" depth="0.4" position="0 3.5 -4.75" roughness="0.5"></a-box>
+      <a-box color="#c9a84c" width="0.3" height="0.02" depth="0.04" position="-2.5 0.65 -4.22" metalness="0.8"></a-box>
+      <a-box color="#c9a84c" width="0.3" height="0.02" depth="0.04" position="-0.83 0.65 -4.22" metalness="0.8"></a-box>
+      <a-box color="#c9a84c" width="0.3" height="0.02" depth="0.04" position="0.83 0.65 -4.22"  metalness="0.8"></a-box>
+      <a-box color="#c9a84c" width="0.3" height="0.02" depth="0.04" position="2.5 0.65 -4.22"   metalness="0.8"></a-box>
+      <a-box color="#c0c0c0" width="0.9" height="0.06" depth="0.55" position="1.8 0.975 -4.55" metalness="0.8" roughness="0.2"></a-box>
+      <a-cylinder color="#c9a84c" radius="0.025" height="0.28" position="1.8 1.1 -4.7" metalness="0.8"></a-cylinder>
+      <a-box color="#222" width="0.85" height="0.04" depth="0.65" position="-1.5 0.99 -4.52" metalness="0.6"></a-box>
+      <a-ring color="#444" radius-inner="0.06" radius-outer="0.1" position="-1.8 1.02 -4.35" rotation="-90 0 0"></a-ring>
+      <a-ring color="#444" radius-inner="0.06" radius-outer="0.1" position="-1.2 1.02 -4.35" rotation="-90 0 0"></a-ring>
+      <a-ring color="#444" radius-inner="0.06" radius-outer="0.1" position="-1.8 1.02 -4.65" rotation="-90 0 0"></a-ring>
+      <a-ring color="#444" radius-inner="0.06" radius-outer="0.1" position="-1.2 1.02 -4.65" rotation="-90 0 0"></a-ring>
+      <a-box color="#e0ddd8" width="0.9" height="2.2" depth="0.75" position="3.4 1.1 -4.3" roughness="0.3" metalness="0.3" shadow="cast:true"></a-box>
+      <a-box color="#c9a84c" width="0.04" height="0.6" depth="0.04" position="3.85 1.8 -3.95" metalness="0.8"></a-box>
+      <a-box color="#1a1a1a" width="3" height="0.95" depth="1.2" position="0 0.475 0.8" roughness="0.3" metalness="0.4" shadow="cast:true"></a-box>
+      <a-box src="#tex-marble" width="3.1" height="0.08" depth="1.3" position="0 0.96 0.8" roughness="0.2"></a-box>
+      <a-cylinder color="#111" radius="0.015" height="1.5" position="-0.8 3.45 0.8"></a-cylinder>
+      <a-sphere color="#fff5c0" radius="0.09" position="-0.8 2.65 0.8" emissive="#fff5c0" emissive-intensity="1"></a-sphere>
+      <a-light type="point" color="#fff0c0" intensity="0.8" position="-0.8 2.6 0.8" distance="5"></a-light>
+      <a-cylinder color="#111" radius="0.015" height="1.5" position="0.8 3.45 0.8"></a-cylinder>
+      <a-sphere color="#fff5c0" radius="0.09" position="0.8 2.65 0.8" emissive="#fff5c0" emissive-intensity="1"></a-sphere>
+      <a-light type="point" color="#fff0c0" intensity="0.8" position="0.8 2.6 0.8" distance="5"></a-light>
+      <a-cylinder color="#111" radius="0.17" height="0.05" position="-0.8 0.76 2.3" metalness="0.5"></a-cylinder>
+      <a-cylinder color="#333" radius="0.03" height="0.76" position="-0.8 0.38 2.3" metalness="0.6"></a-cylinder>
+      <a-cylinder color="#111" radius="0.17" height="0.05" position="0.8 0.76 2.3"  metalness="0.5"></a-cylinder>
+      <a-cylinder color="#333" radius="0.03" height="0.76" position="0.8 0.38 2.3"  metalness="0.6"></a-cylinder>
+      <a-box src="#tex-wood" width="2.4" height="0.08" depth="1.1" position="0 0.82 4.2" roughness="0.4" shadow="cast:true"></a-box>
+      <a-box color="#3a2a10" width="0.08" height="0.82" depth="0.08" position="-1.1 0.41 3.7"></a-box>
+      <a-box color="#3a2a10" width="0.08" height="0.82" depth="0.08" position="1.1 0.41 3.7"></a-box>
+      <a-box color="#3a2a10" width="0.08" height="0.82" depth="0.08" position="-1.1 0.41 4.7"></a-box>
+      <a-box color="#3a2a10" width="0.08" height="0.82" depth="0.08" position="1.1 0.41 4.7"></a-box>
+      <a-box color="#2a2a2a" width="0.5" height="0.05" depth="0.5" position="-0.6 0.48 5.3" roughness="0.8"></a-box>
+      <a-box color="#2a2a2a" width="0.5" height="0.55" depth="0.06" position="-0.6 0.77 5.52" roughness="0.8"></a-box>
+      <a-box color="#2a2a2a" width="0.5" height="0.05" depth="0.5" position="0.6 0.48 5.3"  roughness="0.8"></a-box>
+      <a-box color="#2a2a2a" width="0.5" height="0.55" depth="0.06" position="0.6 0.77 5.52"  roughness="0.8"></a-box>
+      <a-box color="#2a2a2a" width="0.5" height="0.05" depth="0.5" position="-0.6 0.48 3.1" roughness="0.8"></a-box>
+      <a-box color="#2a2a2a" width="0.5" height="0.55" depth="0.06" position="-0.6 0.77 2.88" roughness="0.8"></a-box>
+      <a-box color="#2a2a2a" width="0.5" height="0.05" depth="0.5" position="0.6 0.48 3.1"  roughness="0.8"></a-box>
+      <a-box color="#2a2a2a" width="0.5" height="0.55" depth="0.06" position="0.6 0.77 2.88"  roughness="0.8"></a-box>
+    </a-entity>
+
+    <!-- GARAGE — single well-positioned car centred and clear of walls -->
+    <a-entity id="garage" position="14 0 3">
+      <a-box src="#tex-concrete" width="8"   height="4.3" depth="0.3"   position="0 2.15 -4"  roughness="0.9" shadow="cast:true"></a-box>
+      <a-box src="#tex-concrete" width="0.3" height="4.3" depth="8"     position="-4 2.15 0"   roughness="0.9"></a-box>
+      <a-box src="#tex-concrete" width="0.3" height="4.3" depth="8"     position="4 2.15 0"    roughness="0.9"></a-box>
+      <a-box src="#tex-roof"     width="8.6" height="0.3" depth="8.6"   position="0 4.45 0"    roughness="0.9"></a-box>
+      <a-box color="#1a1a1a" width="8.6" height="0.35" depth="0.35" position="0 4.3 4" metalness="0.5" roughness="0.3"></a-box>
+      <a-box color="#1a1a1a" width="0.3" height="4.3" depth="0.3" position="-4 2.15 4" metalness="0.4"></a-box>
+      <a-box color="#1a1a1a" width="0.3" height="4.3" depth="0.3" position="4 2.15 4"  metalness="0.4"></a-box>
+      <a-plane src="#tex-tiles" width="8" height="8" rotation="-90 0 0" position="0 0.02 0" repeat="2 2"></a-plane>
+      <!-- Ceiling light strips -->
+      <a-box color="#fff5e0" width="6" height="0.06" depth="0.2" position="0 4.2 -1"
+             emissive="#fff5e0" emissive-intensity="0.8"></a-box>
+      <a-box color="#fff5e0" width="6" height="0.06" depth="0.2" position="0 4.2 2"
+             emissive="#fff5e0" emissive-intensity="0.8"></a-box>
+      <!-- Epoxy floor accent lines -->
+      <a-box color="#c9a84c" width="7.6" height="0.01" depth="0.04" position="0 0.03 -1.5" metalness="0.8"></a-box>
+      <a-box color="#c9a84c" width="7.6" height="0.01" depth="0.04" position="0 0.03 1.5"  metalness="0.8"></a-box>
+      <!-- Wall-mounted tool panel (rear wall) -->
+      <a-box color="#222" width="3" height="2" depth="0.08" position="-0.5 2.2 -3.8" roughness="0.3" metalness="0.5"></a-box>
+      <a-box color="#c9a84c" width="2.8" height="0.04" depth="0.1" position="-0.5 3.22 -3.8" metalness="0.8"></a-box>
+      <a-box color="#c9a84c" width="2.8" height="0.04" depth="0.1" position="-0.5 1.22 -3.8" metalness="0.8"></a-box>
+      <!-- Silhouette tools on panel -->
+      <a-cylinder color="#555" radius="0.06" height="0.5" position="-1.8 2.5 -3.74" rotation="90 0 0" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#555" radius="0.06" height="0.5" position="-1.3 2.5 -3.74" rotation="90 0 0" metalness="0.7"></a-cylinder>
+      <a-box color="#666" width="0.3" height="0.45" depth="0.06" position="0 2.5 -3.74" metalness="0.6"></a-box>
+      <!-- Wheel chocks (low orange blocks in front of rear wheels) -->
+      <a-box color="#e85d04" width="0.25" height="0.12" depth="0.25" position="-1.0 0.06 1.8" roughness="0.9"></a-box>
+      <a-box color="#e85d04" width="0.25" height="0.12" depth="0.25" position="1.0 0.06 1.8"  roughness="0.9"></a-box>
+
+      <!-- GARAGE CAR — deep red sports car, centred, facing the open door -->
+      <!-- Body lower chassis -->
+      <a-box color="#8b0000" width="1.9" height="0.45" depth="4.0"
+             position="0 0.52 -0.5" roughness="0.2" metalness="0.6" shadow="cast:true"></a-box>
+      <!-- Body upper cabin -->
+      <a-box color="#8b0000" width="1.7" height="0.42" depth="1.95"
+             position="0 0.96 -0.55" roughness="0.2" metalness="0.5"></a-box>
+      <!-- Roof -->
+      <a-box color="#7a0000" width="1.55" height="0.16" depth="1.65"
+             position="0 1.18 -0.55" roughness="0.2" metalness="0.5"></a-box>
+      <!-- Hood -->
+      <a-box color="#8b0000" width="1.85" height="0.16" depth="0.95"
+             position="0 0.73 -2.0" rotation="7 0 0" roughness="0.2" metalness="0.6"></a-box>
+      <!-- Boot -->
+      <a-box color="#8b0000" width="1.85" height="0.16" depth="0.75"
+             position="0 0.73 0.95" rotation="-5 0 0" roughness="0.2" metalness="0.6"></a-box>
+      <!-- Windscreen -->
+      <a-box color="#88bbdd" opacity="0.35" width="1.5" height="0.44" depth="0.08"
+             position="0 1.01 -1.42" rotation="-22 0 0" transparent="true" metalness="0.9" roughness="0.05"></a-box>
+      <!-- Rear screen -->
+      <a-box color="#88bbdd" opacity="0.32" width="1.5" height="0.38" depth="0.08"
+             position="0 1.01 0.35" rotation="18 0 0" transparent="true" metalness="0.9" roughness="0.05"></a-box>
+      <!-- Side glass left -->
+      <a-box color="#88bbdd" opacity="0.28" width="0.06" height="0.3" depth="1.45"
+             position="-0.86 1.0 -0.55" transparent="true" metalness="0.9" roughness="0.05"></a-box>
+      <!-- Side glass right -->
+      <a-box color="#88bbdd" opacity="0.28" width="0.06" height="0.3" depth="1.45"
+             position="0.86 1.0 -0.55" transparent="true" metalness="0.9" roughness="0.05"></a-box>
+      <!-- Front bumper -->
+      <a-box color="#111" width="1.8" height="0.22" depth="0.12"
+             position="0 0.35 -2.55" roughness="0.2" metalness="0.6"></a-box>
+      <!-- Rear bumper -->
+      <a-box color="#111" width="1.8" height="0.22" depth="0.12"
+             position="0 0.35 1.55" roughness="0.2" metalness="0.6"></a-box>
+      <!-- Grille -->
+      <a-box color="#111" width="1.15" height="0.18" depth="0.08"
+             position="0 0.53 -2.52" roughness="0.1" metalness="0.9"></a-box>
+      <!-- Headlights left + right -->
+      <a-box color="#fffde0" width="0.32" height="0.12" depth="0.06"
+             position="-0.7 0.6 -2.52" emissive="#fffde0" emissive-intensity="0.9"></a-box>
+      <a-box color="#fffde0" width="0.32" height="0.12" depth="0.06"
+             position="0.7 0.6 -2.52" emissive="#fffde0" emissive-intensity="0.9"></a-box>
+      <!-- Tail lights -->
+      <a-box color="#cc1111" width="0.36" height="0.1" depth="0.06"
+             position="-0.7 0.57 1.56" emissive="#cc1111" emissive-intensity="0.85"></a-box>
+      <a-box color="#cc1111" width="0.36" height="0.1" depth="0.06"
+             position="0.7 0.57 1.56" emissive="#cc1111" emissive-intensity="0.85"></a-box>
+      <!-- Side skirts -->
+      <a-box color="#111" width="0.08" height="0.1" depth="3.5"
+             position="-0.96 0.35 -0.5" roughness="0.2" metalness="0.7"></a-box>
+      <a-box color="#111" width="0.08" height="0.1" depth="3.5"
+             position="0.96 0.35 -0.5" roughness="0.2" metalness="0.7"></a-box>
+      <!-- Door handles -->
+      <a-box color="#c9a84c" width="0.18" height="0.04" depth="0.04"
+             position="-0.97 0.9 -0.7" metalness="0.9"></a-box>
+      <a-box color="#c9a84c" width="0.18" height="0.04" depth="0.04"
+             position="0.97 0.9 -0.7" metalness="0.9"></a-box>
+      <!-- Exhaust pipes -->
+      <a-cylinder color="#aaa" radius="0.055" height="0.2"
+             position="-0.5 0.23 1.62" rotation="90 0 0" metalness="0.85"></a-cylinder>
+      <a-cylinder color="#aaa" radius="0.055" height="0.2"
+             position="0.5 0.23 1.62" rotation="90 0 0" metalness="0.85"></a-cylinder>
+      <!-- Wheels — front left, front right, rear left, rear right -->
+      <a-cylinder color="#1a1a1a" radius="0.33" height="0.24" position="-1.0 0.34 -1.55" rotation="0 0 90" roughness="1" shadow="cast:true"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.2"  height="0.26" position="-1.0 0.34 -1.55" rotation="0 0 90" metalness="0.9" roughness="0.1"></a-cylinder>
+      <a-cylinder color="#222"    radius="0.06" height="0.28" position="-1.0 0.34 -1.55" rotation="0 0 90" metalness="0.6"></a-cylinder>
+      <a-box color="#c9a84c" width="0.04" height="0.27" depth="0.04" position="-1.0 0.34 -1.55" metalness="0.8"></a-box>
+      <a-box color="#c9a84c" width="0.27" height="0.04" depth="0.04" position="-1.0 0.34 -1.55" metalness="0.8"></a-box>
+
+      <a-cylinder color="#1a1a1a" radius="0.33" height="0.24" position="1.0 0.34 -1.55" rotation="0 0 90" roughness="1" shadow="cast:true"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.2"  height="0.26" position="1.0 0.34 -1.55" rotation="0 0 90" metalness="0.9" roughness="0.1"></a-cylinder>
+      <a-cylinder color="#222"    radius="0.06" height="0.28" position="1.0 0.34 -1.55" rotation="0 0 90" metalness="0.6"></a-cylinder>
+      <a-box color="#c9a84c" width="0.04" height="0.27" depth="0.04" position="1.0 0.34 -1.55" metalness="0.8"></a-box>
+      <a-box color="#c9a84c" width="0.27" height="0.04" depth="0.04" position="1.0 0.34 -1.55" metalness="0.8"></a-box>
+
+      <a-cylinder color="#1a1a1a" radius="0.33" height="0.24" position="-1.0 0.34 0.65" rotation="0 0 90" roughness="1" shadow="cast:true"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.2"  height="0.26" position="-1.0 0.34 0.65" rotation="0 0 90" metalness="0.9" roughness="0.1"></a-cylinder>
+      <a-cylinder color="#222"    radius="0.06" height="0.28" position="-1.0 0.34 0.65" rotation="0 0 90" metalness="0.6"></a-cylinder>
+      <a-box color="#c9a84c" width="0.04" height="0.27" depth="0.04" position="-1.0 0.34 0.65" metalness="0.8"></a-box>
+      <a-box color="#c9a84c" width="0.27" height="0.04" depth="0.04" position="-1.0 0.34 0.65" metalness="0.8"></a-box>
+
+      <a-cylinder color="#1a1a1a" radius="0.33" height="0.24" position="1.0 0.34 0.65" rotation="0 0 90" roughness="1" shadow="cast:true"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.2"  height="0.26" position="1.0 0.34 0.65" rotation="0 0 90" metalness="0.9" roughness="0.1"></a-cylinder>
+      <a-cylinder color="#222"    radius="0.06" height="0.28" position="1.0 0.34 0.65" rotation="0 0 90" metalness="0.6"></a-cylinder>
+      <a-box color="#c9a84c" width="0.04" height="0.27" depth="0.04" position="1.0 0.34 0.65" metalness="0.8"></a-box>
+      <a-box color="#c9a84c" width="0.27" height="0.04" depth="0.04" position="1.0 0.34 0.65" metalness="0.8"></a-box>
+      <!-- Headlight glow -->
+      <a-light type="point" color="#fffde0" intensity="1.0" position="0 0.62 -2.8" distance="6"></a-light>
+    </a-entity>
+
+    <!-- POOL -->
+    <a-entity id="pool" position="0 0 14">
+      <a-plane src="#tex-marble" width="22" height="16" rotation="-90 0 0" position="0 0.02 0" repeat="4 3" shadow="receive:true"></a-plane>
+      <a-box color="#d4e8f0" width="12" height="1.2" depth="0.3" position="0 -0.3  3.5"  shadow="cast:true"></a-box>
+      <a-box color="#d4e8f0" width="12" height="1.2" depth="0.3" position="0 -0.3 -3.5"  shadow="cast:true"></a-box>
+      <a-box color="#d4e8f0" width="0.3" height="1.2" depth="7"  position="6 -0.3  0"    shadow="cast:true"></a-box>
+      <a-box color="#d4e8f0" width="0.3" height="1.2" depth="7"  position="-6 -0.3 0"    shadow="cast:true"></a-box>
+      <a-plane color="#1a6b8a" width="12" height="7" rotation="-90 0 0" position="0 -0.85 0"></a-plane>
+      <a-plane color="#1ab8e8" opacity="0.82" width="11.9" height="6.9" rotation="-90 0 0"
+               position="0 0.38 0" transparent="true" metalness="0.3" roughness="0.05"
+               animation__ripple="property:position; from:0 0.38 0; to:0 0.42 0; dur:1800; dir:alternate; loop:true; easing:easeInOutSine"
+               animation__color="property:material.color; from:#1ab8e8; to:#0d9ac4; dur:2400; dir:alternate; loop:true"></a-plane>
+      <a-box src="#tex-marble" width="13" height="0.15" depth="0.5" position="0 0.45  3.75" repeat="3 1"></a-box>
+      <a-box src="#tex-marble" width="13" height="0.15" depth="0.5" position="0 0.45 -3.75" repeat="3 1"></a-box>
+      <a-box src="#tex-marble" width="0.5" height="0.15" depth="8"  position=" 6.25 0.45 0" repeat="1 2"></a-box>
+      <a-box src="#tex-marble" width="0.5" height="0.15" depth="8"  position="-6.25 0.45 0" repeat="1 2"></a-box>
+      <a-box color="#c8c0b0" width="1.8" height="0.1" depth="0.65" position="-3 0.1 6"  shadow="cast:true"></a-box>
+      <a-box color="#c8c0b0" width="1.8" height="0.1" depth="0.65" position="3 0.1 6"   shadow="cast:true"></a-box>
+      <a-cylinder color="#c9a84c" radius="0.08" height="0.4" position="-8 0.2 4"  emissive="#c9a84c" emissive-intensity="0.5"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.08" height="0.4" position="8 0.2 4"   emissive="#c9a84c" emissive-intensity="0.5"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.08" height="0.4" position="-8 0.2 -4" emissive="#c9a84c" emissive-intensity="0.5"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.08" height="0.4" position="8 0.2 -4"  emissive="#c9a84c" emissive-intensity="0.5"></a-cylinder>
+      <a-light type="point" color="#ffe8a0" intensity="0.5" position="-8 0.5 4"  distance="4"></a-light>
+      <a-light type="point" color="#ffe8a0" intensity="0.5" position="8 0.5 4"   distance="4"></a-light>
+    </a-entity>
+
+    <!-- FIRE PIT -->
+    <a-entity id="fire-pit" position="0 0 24">
+      <a-box src="#tex-tiles" width="8" height="0.3" depth="8" position="0 -0.2 0" shadow="receive:true"></a-box>
+      <a-cylinder color="#3a2a1a" radius="0.8" height="0.4" position="0 0.1 0" shadow="cast:true"></a-cylinder>
+      <a-cone color="#ff6600" radius-bottom="0.35" radius-top="0.02" height="0.8"
+              position="0 0.55 0" opacity="0.85" transparent="true"
+              animation__flicker="property:scale; from:1 1 1; to:0.85 1.2 0.85; dur:200; dir:alternate; loop:true; easing:easeInOutSine"
+              animation__color="property:material.color; from:#ff6600; to:#ffcc00; dur:300; dir:alternate; loop:true"></a-cone>
+      <a-cone color="#ff3300" radius-bottom="0.2" radius-top="0.01" height="0.6"
+              position="0.1 0.6 0.1" opacity="0.7" transparent="true"
+              animation__flicker="property:scale; from:1 1 1; to:0.9 1.15 0.9; dur:250; dir:alternate; loop:true"></a-cone>
+      <a-box src="#tex-tiles" width="6" height="0.4" depth="1" position="0 0.1  3.2" shadow="cast:true"></a-box>
+      <a-box src="#tex-tiles" width="6" height="0.4" depth="1" position="0 0.1 -3.2" shadow="cast:true"></a-box>
+      <a-box src="#tex-tiles" width="1" height="0.4" depth="6" position=" 3.2 0.1 0" shadow="cast:true"></a-box>
+      <a-box src="#tex-tiles" width="1" height="0.4" depth="6" position="-3.2 0.1 0" shadow="cast:true"></a-box>
+      <a-box color="#8a8a8a" width="5.5" height="0.15" depth="0.8" position="0 0.33  3.2"></a-box>
+      <a-box color="#8a8a8a" width="5.5" height="0.15" depth="0.8" position="0 0.33 -3.2"></a-box>
+      <a-box color="#8a8a8a" width="0.8" height="0.15" depth="5.5" position=" 3.2 0.33 0"></a-box>
+      <a-box color="#8a8a8a" width="0.8" height="0.15" depth="5.5" position="-3.2 0.33 0"></a-box>
+    </a-entity>
+
+    <!-- TREES -->
+    <a-entity gltf-model="#model-palm" position="-22 0 8"  scale="2 2 2"       shadow="cast:true"></a-entity>
+    <a-entity gltf-model="#model-palm" position="-24 0 18" scale="1.8 1.8 1.8" shadow="cast:true"></a-entity>
+    <a-entity gltf-model="#model-palm" position="-22 0 -4" scale="2.2 2.2 2.2" shadow="cast:true"></a-entity>
+    <a-entity gltf-model="#model-tree" position="26 0 10"   scale="1.5 1.5 1.5" shadow="cast:true"></a-entity>
+    <a-entity gltf-model="#model-tree" position="28 0 22"   scale="1.3 1.3 1.3" shadow="cast:true"></a-entity>
+    <a-entity gltf-model="#model-tree" position="-28 0 26"  scale="1.6 1.6 1.6" shadow="cast:true"></a-entity>
+    <a-entity gltf-model="#model-tree" position="0 0 -30"   scale="1.4 1.4 1.4" shadow="cast:true"></a-entity>
+    <a-entity gltf-model="#model-tree" position="-28 0 -10" scale="1.3 1.3 1.3" shadow="cast:true"></a-entity>
+    <a-entity gltf-model="#model-tree" position="-28 0 -36" scale="1.4 1.4 1.4" shadow="cast:true"></a-entity>
+    <a-entity gltf-model="#model-palm" position="-28 0 38"  scale="1.6 1.6 1.6" shadow="cast:true"></a-entity>
+    <a-entity gltf-model="#model-tree" position="32 0 -12"  scale="1.2 1.2 1.2" shadow="cast:true"></a-entity>
+    <a-entity gltf-model="#model-palm" position="32 0 -30"  scale="1.5 1.5 1.5" shadow="cast:true"></a-entity>
+
+    <!-- Animated dog -->
+    <a-entity position="-5 0 10"
+              animation="property:rotation; from:0 0 0; to:0 360 0; dur:9000; loop:true; easing:linear">
+      <a-box color="#8b6040" width="0.6" height="0.45" depth="0.9" position="0 0.5 0"  roughness="0.9" shadow="cast:true"></a-box>
+      <a-sphere color="#8b6040" radius="0.28" position="0.55 0.72 0" roughness="0.9"></a-sphere>
+      <a-cylinder color="#8b6040" radius="0.07" height="0.4" position="-0.2 0.2 0.3"  roughness="0.9"></a-cylinder>
+      <a-cylinder color="#8b6040" radius="0.07" height="0.4" position="0.2 0.2 0.3"   roughness="0.9"></a-cylinder>
+      <a-cylinder color="#8b6040" radius="0.07" height="0.4" position="-0.2 0.2 -0.3" roughness="0.9"></a-cylinder>
+      <a-cylinder color="#8b6040" radius="0.07" height="0.4" position="0.2 0.2 -0.3"  roughness="0.9"></a-cylinder>
+      <a-box color="#6b4020" width="0.08" height="0.08" depth="0.4" position="0 0.6 -0.6" roughness="0.9"></a-box>
+    </a-entity>
+
+    <!-- Path lights -->
+    <a-cylinder color="#c9a84c" radius="0.08" height="0.4" position="-8 0.2 10" emissive="#c9a84c" emissive-intensity="0.5"></a-cylinder>
+    <a-cylinder color="#c9a84c" radius="0.08" height="0.4" position="8 0.2 10"  emissive="#c9a84c" emissive-intensity="0.5"></a-cylinder>
+    <a-light type="point" color="#ffe8a0" intensity="0.5" position="-8 0.5 10" distance="4"></a-light>
+    <a-light type="point" color="#ffe8a0" intensity="0.5" position="8 0.5 10"  distance="4"></a-light>
+
+    <!-- FLOOR 1 -->
+    <a-entity id="floor1" position="0 4.45 0">
+      <a-box src="#tex-concrete" width="20" height="4.15" depth="0.3" position="0 2.075 -6"  roughness="0.9" shadow="cast:true"></a-box>
+      <a-box src="#tex-concrete" width="0.3" height="4.15" depth="12"  position="-10 2.075 0" roughness="0.9" shadow="cast:true"></a-box>
+      <a-box src="#tex-concrete" width="0.3" height="4.15" depth="12"  position="10 2.075 0"  roughness="0.9" shadow="cast:true"></a-box>
+      <a-box src="#tex-concrete" width="0.2" height="4.15" depth="12"  position="1 2.075 0"   roughness="0.9" shadow="cast:true"></a-box>
+      <a-box src="#tex-concrete" width="20" height="0.75" depth="0.3"  position="0 0.375 6"   roughness="0.9"></a-box>
+      <a-box src="#tex-concrete" width="20" height="0.65" depth="0.3"  position="0 3.8 6"     roughness="0.9"></a-box>
+      <a-box color="#88bbdd" opacity="0.2" width="20" height="2.75" depth="0.15"
+             position="0 2.125 6" transparent="true" metalness="0.9" roughness="0.05"></a-box>
+      <a-box color="#111" width="20" height="0.08" depth="0.2" position="0 2.125 6"></a-box>
+      <a-box color="#111" width="0.12" height="2.75" depth="0.2" position="-8 2.125 6"></a-box>
+      <a-box color="#111" width="0.12" height="2.75" depth="0.2" position="-4 2.125 6"></a-box>
+      <a-box color="#111" width="0.12" height="2.75" depth="0.2" position="0 2.125 6"></a-box>
+      <a-box color="#111" width="0.12" height="2.75" depth="0.2" position="4 2.125 6"></a-box>
+      <a-box color="#111" width="0.12" height="2.75" depth="0.2" position="8 2.125 6"></a-box>
+      <a-box src="#tex-concrete" width="20" height="0.3" depth="12" position="0 4.3 0" roughness="0.9"></a-box>
+      <a-box src="#tex-wood" width="19.4" height="0.05" depth="11.4" position="0 0.025 0" repeat="5 3" roughness="0.5" shadow="receive:true"></a-box>
+      <a-box src="#tex-marble" width="20" height="0.2" depth="3"  position="0 0 7.5" shadow="cast:true"></a-box>
+      <a-box color="#88bbdd" opacity="0.3" width="20" height="1.0" depth="0.08"
+             position="0 0.6 9" transparent="true" metalness="0.9" roughness="0.05"></a-box>
+      <a-box color="#111" width="20" height="0.06" depth="0.1" position="0 1.1 9"></a-box>
+      <a-box color="#3a3a3a" width="1.6" height="0.45" depth="0.9" position="-6 0.275 7.8" roughness="0.9" shadow="cast:true"></a-box>
+      <a-box color="#2d2d2d" width="1.6" height="0.6"  depth="0.18" position="-6 0.65 8.2" roughness="0.9"></a-box>
+      <a-box color="#3a3a3a" width="1.6" height="0.45" depth="0.9" position="6 0.275 7.8"  roughness="0.9" shadow="cast:true"></a-box>
+      <a-box color="#2d2d2d" width="1.6" height="0.6"  depth="0.18" position="6 0.65 8.2"  roughness="0.9"></a-box>
+      <a-cylinder color="#c9a84c" radius="0.4" height="0.05" position="0 0.5 7.8" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.04" height="0.5" position="0 0.25 7.8" metalness="0.7"></a-cylinder>
+      <a-cylinder color="#2d1a0a" radius="0.2" height="0.4"  position="-9 0.2 8.2" roughness="1"></a-cylinder>
+      <a-sphere   color="#1a4a1a" radius="0.35"              position="-9 0.7 8.2" roughness="1"></a-sphere>
+      <a-cylinder color="#2d1a0a" radius="0.2" height="0.4"  position="9 0.2 8.2"  roughness="1"></a-cylinder>
+      <a-sphere   color="#1a4a1a" radius="0.35"              position="9 0.7 8.2"  roughness="1"></a-sphere>
+      <a-cylinder color="#c9a84c" radius="0.06" height="0.3" position="-7 0.15 8.8" emissive="#c9a84c" emissive-intensity="0.6"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.06" height="0.3" position="7 0.15 8.8"  emissive="#c9a84c" emissive-intensity="0.6"></a-cylinder>
+      <a-light type="point" color="#ffe8a0" intensity="0.6" position="-7 4.85 8.8" distance="5"></a-light>
+      <a-light type="point" color="#ffe8a0" intensity="0.6" position="7 4.85 8.8"  distance="5"></a-light>
+
+      <!-- Master bedroom -->
+      <a-entity id="master-bed" position="-4.5 0 -1">
+        <a-box color="#1a1a2e" width="10.7" height="4.15" depth="0.1" position="0 2.075 -4.9" roughness="0.8"></a-box>
+        <a-box color="#22223a" width="2.5"  height="3.2"  depth="0.08" position="-3 1.7 -4.84"></a-box>
+        <a-box color="#22223a" width="2.5"  height="3.2"  depth="0.08" position="0 1.7 -4.84"></a-box>
+        <a-box color="#22223a" width="2.5"  height="3.2"  depth="0.08" position="3 1.7 -4.84"></a-box>
+        <a-box color="#c9a84c" width="10.7" height="0.04" depth="0.12" position="0 0.1  -4.84" metalness="0.8"></a-box>
+        <a-box color="#c9a84c" width="10.7" height="0.04" depth="0.12" position="0 4.05 -4.84" metalness="0.8"></a-box>
+        <a-cylinder color="#c9a84c" radius="0.38" height="0.06" position="0 4.05 -1" metalness="0.7" emissive="#c9a84c" emissive-intensity="0.2"></a-cylinder>
+        <a-cylinder color="#fff5c0" radius="0.28" height="0.04" position="0 4.01 -1" emissive="#fff5c0" emissive-intensity="0.9"></a-cylinder>
+        <a-light type="point" color="#fff0d0" intensity="1.4" position="0 3.9 -1" distance="14"></a-light>
+        <a-box color="#1a1a1a" width="3.2" height="0.3"  depth="2.4" position="0 0.18 -3.2" roughness="0.4" metalness="0.3" shadow="cast:true"></a-box>
+        <a-box color="#e8e4dc" width="3.0" height="0.25" depth="2.2" position="0 0.46 -3.2" roughness="0.9"></a-box>
+        <a-box color="#1a1a2e" width="3.2" height="1.3"  depth="0.15" position="0 1.0 -4.3" roughness="0.6"></a-box>
+        <a-box color="#2d2d4a" width="2.9" height="1.0"  depth="0.1"  position="0 0.9 -4.22" roughness="0.9"></a-box>
+        <a-box color="#c9a84c" width="3.25" height="0.04" depth="0.18" position="0 1.65 -4.28" metalness="0.8"></a-box>
+        <a-box color="#f0ece4" width="2.8" height="0.2"  depth="1.5"  position="0 0.65 -2.8" roughness="1"></a-box>
+        <a-box color="#fff"    width="1.0" height="0.2"  depth="0.6"  position="-0.8 0.68 -3.9" roughness="1"></a-box>
+        <a-box color="#fff"    width="1.0" height="0.2"  depth="0.6"  position="0.8 0.68 -3.9"  roughness="1"></a-box>
+        <a-box color="#c9a84c" width="0.55" height="0.15" depth="0.5" position="0 0.73 -3.65" roughness="0.8"></a-box>
+        <a-plane color="#1a1a2e" width="4.5" height="3.5" rotation="-90 0 0" position="0 0.03 -2.2"></a-plane>
+        <a-plane color="#22223a" width="4.1" height="3.1" rotation="-90 0 0" position="0 0.035 -2.2"></a-plane>
+      </a-entity>
+
+      <!-- Second bedroom -->
+      <a-entity id="second-bed" position="5.5 0 -1">
+        <a-box color="#1e2e1e" width="8.8" height="4.15" depth="0.1" position="0 2.075 -4.9" roughness="0.8"></a-box>
+        <a-box color="#c9a84c" width="8.8" height="0.04" depth="0.12" position="0 0.1  -4.84" metalness="0.8"></a-box>
+        <a-box color="#c9a84c" width="8.8" height="0.04" depth="0.12" position="0 4.05 -4.84" metalness="0.8"></a-box>
+        <a-cylinder color="#c9a84c" radius="0.3" height="0.06" position="0 4.05 -1.5" metalness="0.7" emissive="#c9a84c" emissive-intensity="0.2"></a-cylinder>
+        <a-cylinder color="#fff5c0" radius="0.22" height="0.04" position="0 4.01 -1.5" emissive="#fff5c0" emissive-intensity="0.9"></a-cylinder>
+        <a-light type="point" color="#fff0d0" intensity="1.2" position="0 3.9 -1.5" distance="12"></a-light>
+        <a-box color="#1a1a1a" width="2.6" height="0.28" depth="2.0" position="0 0.17 -3.2" roughness="0.4" metalness="0.3" shadow="cast:true"></a-box>
+        <a-box color="#ddd8d0" width="2.45" height="0.22" depth="1.85" position="0 0.43 -3.2" roughness="0.9"></a-box>
+        <a-box color="#1e2e1e" width="2.6" height="1.1" depth="0.15" position="0 0.85 -4.15" roughness="0.6"></a-box>
+        <a-box color="#c9a84c" width="2.65" height="0.04" depth="0.18" position="0 1.42 -4.12" metalness="0.8"></a-box>
+        <a-box color="#e8e4dc" width="2.3" height="0.18" depth="1.2"  position="0 0.6 -2.8" roughness="1"></a-box>
+        <a-plane color="#1e2e1e" width="3.8" height="3.0" rotation="-90 0 0" position="0 0.03 -2.2"></a-plane>
+      </a-entity>
+
+      <!-- Bathroom (floor 1) -->
+      <a-entity id="bathroom" position="-6 0 2">
+        <a-plane src="#tex-tiles" width="2" height="2" rotation="-90 0 0" position="0 0.01 0" repeat="1 1" roughness="0.4"></a-plane>
+        <a-box color="#ffffff" width="0.5" height="0.5" depth="0.6" position="0 0.25 0" roughness="0.1"></a-box>
+        <a-box color="#ffffff" width="0.4" height="0.6" depth="0.3" position="0 0.8 -0.2" roughness="0.1"></a-box>
+        <a-cylinder color="#ffffff" radius="0.2" height="0.05" position="0 0.55 0.15" roughness="0.1"></a-cylinder>
+        <a-box src="#tex-wood" width="0.8" height="0.8" depth="0.4" position="0.8 0.4 0" roughness="0.6"></a-box>
+        <a-cylinder color="#ffffff" radius="0.15" height="0.1" position="0.8 0.55 0.15" roughness="0.1"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.02" height="0.2" position="0.8 0.65 0.15" metalness="0.8"></a-cylinder>
+        <a-box color="#c9a84c" opacity="0.5" width="0.6" height="0.8" depth="0.02" position="0.8 1.2 0" transparent="true" metalness="0.9"></a-box>
+        <a-box color="#88bbdd" opacity="0.3" width="1" height="2" depth="1" position="-0.5 1 0" transparent="true" metalness="0.8" roughness="0.05"></a-box>
+        <a-cylinder color="#c9a84c" radius="0.03" height="0.1" position="-0.5 1.8 0.3" metalness="0.8"></a-cylinder>
+        <a-light type="point" color="#fff5e0" intensity="0.8" position="0 2.5 0" distance="4"></a-light>
+      </a-entity>
+    </a-entity>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         FLOOR 2 — Overhauled lounge + new luxury en-suite bathroom
+    ═══════════════════════════════════════════════════════════ -->
+    <a-entity id="floor2" position="0 8.75 0">
+      <!-- Structural shell -->
+      <a-box src="#tex-concrete" width="20" height="3.75" depth="0.3"  position="0 1.875 -6"  roughness="0.9" shadow="cast:true"></a-box>
+      <a-box src="#tex-concrete" width="0.3" height="3.75" depth="12"  position="-10 1.875 0"  roughness="0.9" shadow="cast:true"></a-box>
+      <a-box src="#tex-concrete" width="0.3" height="3.75" depth="12"  position="10 1.875 0"   roughness="0.9" shadow="cast:true"></a-box>
+      <a-box src="#tex-concrete" width="20" height="0.8" depth="0.3"   position="0 0.4 6"     roughness="0.9"></a-box>
+      <!-- Floors -->
+      <a-plane src="#tex-marble" width="19.4" height="11.4" rotation="-90 0 0" position="0 0.03 0"  repeat="5 3" roughness="0.3"></a-plane>
+      <a-plane src="#tex-tiles"  width="20"   height="6"    rotation="-90 0 0" position="0 0.03 8.5" repeat="5 2" roughness="0.5"></a-plane>
+      <!-- Roof slab -->
+      <a-box src="#tex-roof" width="22" height="0.4" depth="14" position="0 3.95 0" roughness="0.9" shadow="cast:true"></a-box>
+      <a-box src="#tex-concrete" width="22" height="0.3" depth="5" position="0 3.8 9.5" roughness="0.9" shadow="cast:true"></a-box>
+      <!-- Balcony railing -->
+      <a-box color="#88bbdd" opacity="0.3" width="22" height="1.1" depth="0.08"
+             position="0 0.65 11" transparent="true" metalness="0.9" roughness="0.05"></a-box>
+      <a-box color="#111" width="22" height="0.06" depth="0.12" position="0 1.2 11"></a-box>
+
+      <!-- ───────────────────────────────────────────────
+           LUXURY LOUNGE (overhauled)
+           Centred in left half of floor 2 (x: -10 to 0, z: -6 to 6)
+      ─────────────────────────────────────────────── -->
+
+      <!-- Dark feature wall with gold panelling strips -->
+      <a-box color="#0e0e14" width="10" height="3.75" depth="0.12" position="-5 1.875 -5.88" roughness="0.8"></a-box>
+      <!-- Vertical gold accent strips on feature wall -->
+      <a-box color="#c9a84c" width="0.04" height="3.75" depth="0.15" position="-8.5 1.875 -5.82" metalness="0.9"></a-box>
+      <a-box color="#c9a84c" width="0.04" height="3.75" depth="0.15" position="-6.5 1.875 -5.82" metalness="0.9"></a-box>
+      <a-box color="#c9a84c" width="0.04" height="3.75" depth="0.15" position="-4.5 1.875 -5.82" metalness="0.9"></a-box>
+      <a-box color="#c9a84c" width="0.04" height="3.75" depth="0.15" position="-2.5 1.875 -5.82" metalness="0.9"></a-box>
+      <!-- Horizontal gold rail at mid-height -->
+      <a-box color="#c9a84c" width="10" height="0.04" depth="0.15" position="-5 1.8 -5.82" metalness="0.9"></a-box>
+      <!-- Illuminated panels between strips -->
+      <a-box color="#1a1624" width="1.7" height="1.6" depth="0.06" position="-7.5 2.3 -5.8"
+             emissive="#1a1624" emissive-intensity="0.4"></a-box>
+      <a-box color="#1a1624" width="1.7" height="1.6" depth="0.06" position="-5.5 2.3 -5.8"
+             emissive="#1a1624" emissive-intensity="0.4"></a-box>
+      <a-box color="#1a1624" width="1.7" height="1.6" depth="0.06" position="-3.5 2.3 -5.8"
+             emissive="#1a1624" emissive-intensity="0.4"></a-box>
+
+      <!-- Sunken lounge seating pit — dark charcoal modular sofa -->
+      <!-- Main long sofa back wall -->
+      <a-box color="#1c1c24" width="7" height="0.52" depth="1.1" position="-5 0.34 -2.8"
+             roughness="0.85" shadow="cast:true"></a-box>
+      <a-box color="#16161e" width="7" height="0.65" depth="0.2" position="-5 0.68 -3.3"
+             roughness="0.85"></a-box>
+      <!-- Left arm -->
+      <a-box color="#1c1c24" width="1.1" height="0.52" depth="3" position="-8.4 0.34 -1.8"
+             roughness="0.85" shadow="cast:true"></a-box>
+      <a-box color="#16161e" width="0.2" height="0.65" depth="3" position="-8.88 0.68 -1.8"
+             roughness="0.85"></a-box>
+      <!-- Right arm sofa -->
+      <a-box color="#1c1c24" width="1.1" height="0.52" depth="3" position="-1.6 0.34 -1.8"
+             roughness="0.85" shadow="cast:true"></a-box>
+      <a-box color="#16161e" width="0.2" height="0.65" depth="3" position="-1.12 0.68 -1.8"
+             roughness="0.85"></a-box>
+      <!-- Seat cushions (lighter tone) -->
+      <a-box color="#28282e" width="6.6" height="0.14" depth="0.9" position="-5 0.61 -2.85"
+             roughness="0.9"></a-box>
+      <!-- Scatter cushions gold -->
+      <a-box color="#c9a84c" width="0.45" height="0.3" depth="0.08" position="-7 0.72 -3.1"
+             rotation="0 0 15" roughness="0.7" metalness="0.2"></a-box>
+      <a-box color="#c9a84c" width="0.45" height="0.3" depth="0.08" position="-3.5 0.72 -3.1"
+             rotation="0 0 -10" roughness="0.7" metalness="0.2"></a-box>
+      <a-box color="#8b6f47" width="0.4" height="0.3" depth="0.08" position="-5.5 0.72 -3.1"
+             rotation="0 0 8" roughness="0.7"></a-box>
+
+      <!-- Backlit low marble coffee table -->
+      <a-box src="#tex-marble" width="2.2" height="0.08" depth="1.2" position="-5 0.44 -1.5"
+             roughness="0.1" shadow="cast:true"></a-box>
+      <!-- Table legs — gold hairpin -->
+      <a-cylinder color="#c9a84c" radius="0.025" height="0.44" position="-6 0.22 -2.05" metalness="0.9"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.025" height="0.44" position="-4 0.22 -2.05" metalness="0.9"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.025" height="0.44" position="-6 0.22 -0.95" metalness="0.9"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.025" height="0.44" position="-4 0.22 -0.95" metalness="0.9"></a-cylinder>
+      <!-- Tabletop glow underlight -->
+      <a-box color="#c9a84c" width="2.0" height="0.02" depth="1.0" position="-5 0.02 -1.5"
+             emissive="#c9a84c" emissive-intensity="0.25"></a-box>
+      <!-- Decor on table: candle + tray -->
+      <a-cylinder color="#f0ece0" radius="0.06" height="0.2" position="-5 0.59 -1.5"
+                  roughness="0.9"></a-cylinder>
+      <a-sphere color="#fffde0" radius="0.04" position="-5 0.7 -1.5"
+                emissive="#fffde0" emissive-intensity="1"></a-sphere>
+      <a-light type="point" color="#ffebb0" intensity="0.35" position="-5 0.72 -1.5" distance="3"></a-light>
+
+      <!-- Grand chandelier — multi-tier gold rings with bulbs -->
+      <!-- Outer ring -->
+      <a-torus color="#c9a84c" radius="1.2" radius-tubular="0.03" position="-5 3.4 -2"
+               rotation="90 0 0" metalness="0.9" roughness="0.1"></a-torus>
+      <!-- Inner ring -->
+      <a-torus color="#c9a84c" radius="0.65" radius-tubular="0.025" position="-5 3.35 -2"
+               rotation="90 0 0" metalness="0.9" roughness="0.1"></a-torus>
+      <!-- Suspension rod -->
+      <a-cylinder color="#c9a84c" radius="0.018" height="0.7" position="-5 3.7 -2" metalness="0.9"></a-cylinder>
+      <!-- Canopy disk -->
+      <a-cylinder color="#c9a84c" radius="0.18" height="0.06" position="-5 4.05 -2" metalness="0.9"></a-cylinder>
+      <!-- Bulbs on outer ring (8 positions) -->
+      <a-sphere color="#fff9d0" radius="0.055" position="-3.8 3.38 -2"  emissive="#fff9d0" emissive-intensity="1.2"></a-sphere>
+      <a-sphere color="#fff9d0" radius="0.055" position="-6.2 3.38 -2"  emissive="#fff9d0" emissive-intensity="1.2"></a-sphere>
+      <a-sphere color="#fff9d0" radius="0.055" position="-5 3.38 -0.8"  emissive="#fff9d0" emissive-intensity="1.2"></a-sphere>
+      <a-sphere color="#fff9d0" radius="0.055" position="-5 3.38 -3.2"  emissive="#fff9d0" emissive-intensity="1.2"></a-sphere>
+      <a-sphere color="#fff9d0" radius="0.055" position="-4.15 3.38 -0.95" emissive="#fff9d0" emissive-intensity="1.2"></a-sphere>
+      <a-sphere color="#fff9d0" radius="0.055" position="-5.85 3.38 -0.95" emissive="#fff9d0" emissive-intensity="1.2"></a-sphere>
+      <a-sphere color="#fff9d0" radius="0.055" position="-4.15 3.38 -3.05" emissive="#fff9d0" emissive-intensity="1.2"></a-sphere>
+      <a-sphere color="#fff9d0" radius="0.055" position="-5.85 3.38 -3.05" emissive="#fff9d0" emissive-intensity="1.2"></a-sphere>
+      <!-- Bulbs inner ring (4) -->
+      <a-sphere color="#fff9d0" radius="0.048" position="-4.35 3.33 -2" emissive="#fff9d0" emissive-intensity="1.2"></a-sphere>
+      <a-sphere color="#fff9d0" radius="0.048" position="-5.65 3.33 -2" emissive="#fff9d0" emissive-intensity="1.2"></a-sphere>
+      <a-sphere color="#fff9d0" radius="0.048" position="-5 3.33 -1.35" emissive="#fff9d0" emissive-intensity="1.2"></a-sphere>
+      <a-sphere color="#fff9d0" radius="0.048" position="-5 3.33 -2.65" emissive="#fff9d0" emissive-intensity="1.2"></a-sphere>
+      <a-light type="point" color="#fff5d0" intensity="2.2" position="-5 3.3 -2" distance="18"></a-light>
+
+      <!-- Large abstract artwork panel on side wall -->
+      <a-box color="#0a0a12" width="0.08" height="2.4" depth="3.6" position="-9.82 2.0 -1"
+             roughness="0.3" metalness="0.3"></a-box>
+      <!-- Brushstroke colour blocks on artwork -->
+      <a-box color="#c9a84c" width="0.06" height="0.5" depth="2.0" position="-9.8 2.8 -0.5"
+             roughness="0.6" metalness="0.2"></a-box>
+      <a-box color="#8b2020" width="0.06" height="1.0" depth="1.0" position="-9.8 1.5 -1.8"
+             roughness="0.6"></a-box>
+      <a-box color="#1a3a6a" width="0.06" height="0.6" depth="1.4" position="-9.8 2.4 -1.6"
+             roughness="0.6"></a-box>
+      <!-- Gold frame -->
+      <a-box color="#c9a84c" width="0.06" height="0.05" depth="3.8" position="-9.8 3.25 -1" metalness="0.9"></a-box>
+      <a-box color="#c9a84c" width="0.06" height="0.05" depth="3.8" position="-9.8 0.76 -1" metalness="0.9"></a-box>
+      <a-box color="#c9a84c" width="0.06" height="2.55" depth="0.05" position="-9.8 2.0 0.9" metalness="0.9"></a-box>
+      <a-box color="#c9a84c" width="0.06" height="2.55" depth="0.05" position="-9.8 2.0 -2.9" metalness="0.9"></a-box>
+      <!-- Picture light -->
+      <a-box color="#c9a84c" width="0.06" height="0.06" depth="1.0" position="-9.75 3.2 -1"
+             emissive="#c9a84c" emissive-intensity="0.5" metalness="0.9"></a-box>
+      <a-light type="point" color="#ffe8a0" intensity="0.6" position="-9.6 3.1 -1" distance="5"></a-light>
+
+      <!-- Floor accent strip LED (gold) along feature wall -->
+      <a-box color="#c9a84c" width="9.8" height="0.02" depth="0.08" position="-5 0.01 -5.5"
+             emissive="#c9a84c" emissive-intensity="0.4"></a-box>
+
+      <!-- Ceiling recessed light grid (lounge half) -->
+      <a-cylinder color="#fff5e0" radius="0.1" height="0.04" position="-7 3.65 -1"  emissive="#fff5e0" emissive-intensity="1"></a-cylinder>
+      <a-cylinder color="#fff5e0" radius="0.1" height="0.04" position="-5 3.65 -1"  emissive="#fff5e0" emissive-intensity="1"></a-cylinder>
+      <a-cylinder color="#fff5e0" radius="0.1" height="0.04" position="-3 3.65 -1"  emissive="#fff5e0" emissive-intensity="1"></a-cylinder>
+      <a-cylinder color="#fff5e0" radius="0.1" height="0.04" position="-7 3.65 -4"  emissive="#fff5e0" emissive-intensity="1"></a-cylinder>
+      <a-cylinder color="#fff5e0" radius="0.1" height="0.04" position="-3 3.65 -4"  emissive="#fff5e0" emissive-intensity="1"></a-cylinder>
+      <a-light type="point" color="#fff5e0" intensity="0.45" position="-7 3.5 -1"  distance="5"></a-light>
+      <a-light type="point" color="#fff5e0" intensity="0.45" position="-5 3.5 -1"  distance="5"></a-light>
+      <a-light type="point" color="#fff5e0" intensity="0.45" position="-3 3.5 -1"  distance="5"></a-light>
+
+      <!-- Tall indoor plant (lounge corner) -->
+      <a-cylinder color="#2d1a0a" radius="0.18" height="0.45" position="-9.2 0.22 -4.8" roughness="1"></a-cylinder>
+      <a-sphere   color="#1a4a1a" radius="0.5"               position="-9.2 0.9 -4.8"  roughness="1"
+        animation="property:scale; from:1 1 1; to:1.02 1.04 1.02; dur:3200; dir:alternate; loop:true"></a-sphere>
+      <a-sphere   color="#2a6b2a" radius="0.32"              position="-9.0 1.25 -4.5"  roughness="1"></a-sphere>
+
+      <!-- Side table + lamp (lounge) -->
+      <a-cylinder color="#3a2a10" radius="0.28" height="0.05" position="-8.2 0.5 -2.5" roughness="0.6" shadow="cast:true"></a-cylinder>
+      <a-cylinder color="#3a2a10" radius="0.04" height="0.5"  position="-8.2 0.25 -2.5" roughness="0.7"></a-cylinder>
+      <!-- Lamp on side table -->
+      <a-cylinder color="#c9a84c" radius="0.22" height="0.04" position="-8.2 0.53 -2.5" metalness="0.8"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.02" height="0.4"  position="-8.2 0.74 -2.5" metalness="0.8"></a-cylinder>
+      <a-cone color="#e8e0c0" radius-bottom="0.28" radius-top="0.1" height="0.35"
+              position="-8.2 1.07 -2.5" roughness="0.8" opacity="0.9" transparent="true"></a-cone>
+      <a-sphere color="#fffde0" radius="0.05" position="-8.2 0.95 -2.5" emissive="#fffde0" emissive-intensity="1"></a-sphere>
+      <a-light type="point" color="#ffe8b0" intensity="0.8" position="-8.2 0.9 -2.5" distance="6"></a-light>
+
+      <!-- ─────────────────────────────────────────────
+           BAR (right half — preserved + enhanced)
+      ───────────────────────────────────────────── -->
+      <a-box color="#1a1a1a" width="5" height="1.1" depth="0.7" position="6 0.55 -4.5" roughness="0.2" metalness="0.5" shadow="cast:true"></a-box>
+      <a-box src="#tex-marble" width="5.1" height="0.08" depth="0.72" position="6 1.14 -4.5" roughness="0.1"></a-box>
+      <a-box color="#111" width="5" height="2.5" depth="0.35" position="6 1.85 -5.65" roughness="0.2" metalness="0.4"></a-box>
+      <a-box src="#tex-wood" width="4.8" height="0.05" depth="0.3" position="6 1.2 -5.5"></a-box>
+      <a-box src="#tex-wood" width="4.8" height="0.05" depth="0.3" position="6 1.9 -5.5"></a-box>
+      <a-box src="#tex-wood" width="4.8" height="0.05" depth="0.3" position="6 2.6 -5.5"></a-box>
+      <a-cylinder color="#1a4a2a" radius="0.06" height="0.35" position="4.5 1.4 -5.5" metalness="0.3"></a-cylinder>
+      <a-cylinder color="#4a1a1a" radius="0.06" height="0.35" position="4.8 1.4 -5.5" metalness="0.3"></a-cylinder>
+      <a-cylinder color="#1a1a4a" radius="0.06" height="0.35" position="5.1 1.4 -5.5" metalness="0.3"></a-cylinder>
+      <a-cylinder color="#4a3a1a" radius="0.06" height="0.38" position="5.4 1.42 -5.5" metalness="0.3"></a-cylinder>
+      <a-cylinder color="#111" radius="0.18" height="0.05" position="4.5 0.82 -3.4" metalness="0.5"></a-cylinder>
+      <a-cylinder color="#333" radius="0.03" height="0.82" position="4.5 0.41 -3.4"  metalness="0.6"></a-cylinder>
+      <a-cylinder color="#111" radius="0.18" height="0.05" position="6 0.82 -3.4"    metalness="0.5"></a-cylinder>
+      <a-cylinder color="#333" radius="0.03" height="0.82" position="6 0.41 -3.4"    metalness="0.6"></a-cylinder>
+      <a-cylinder color="#111" radius="0.18" height="0.05" position="7.5 0.82 -3.4"  metalness="0.5"></a-cylinder>
+      <a-cylinder color="#333" radius="0.03" height="0.82" position="7.5 0.41 -3.4"  metalness="0.6"></a-cylinder>
+      <a-cylinder color="#222" radius="0.015" height="1.4" position="6 2.7 -4.2"></a-cylinder>
+      <a-sphere color="#fff5c0" radius="0.09" position="6 1.95 -4.2" emissive="#fff5c0" emissive-intensity="1"></a-sphere>
+      <a-light type="point" color="#fff0c0" intensity="1.2" position="6 1.9 -4.2" distance="8"></a-light>
+
+      <!-- ─────────────────────────────────────────────
+           TERRACE (preserved)
+      ───────────────────────────────────────────── -->
+      <a-box color="#2a2a2a" width="1.8" height="0.45" depth="0.85" position="-6 0.275 8"   roughness="0.9" shadow="cast:true"></a-box>
+      <a-box color="#1e1e1e" width="1.8" height="0.6"  depth="0.18" position="-6 0.65 8.38" roughness="0.9"></a-box>
+      <a-box color="#2a2a2a" width="1.8" height="0.45" depth="0.85" position="-3 0.275 8"   roughness="0.9" shadow="cast:true"></a-box>
+      <a-cylinder color="#2d1a0a" radius="0.22" height="0.5"  position="8 0.25 8.5"  roughness="1"></a-cylinder>
+      <a-sphere   color="#1a4a1a" radius="0.45"               position="8 0.92 8.5"  roughness="1"
+        animation="property:scale; from:1 1 1; to:1.02 1.04 1.02; dur:3000; dir:alternate; loop:true"></a-sphere>
+      <a-cylinder color="#2d1a0a" radius="0.22" height="0.5"  position="-8 0.25 8.5" roughness="1"></a-cylinder>
+      <a-sphere   color="#1a4a1a" radius="0.45"               position="-8 0.92 8.5" roughness="1"
+        animation="property:scale; from:1 1 1; to:1.02 1.04 1.02; dur:3500; dir:alternate; loop:true"></a-sphere>
+      <a-cylinder color="#c9a84c" radius="0.07" height="0.4" position="-9 0.2 10.5" emissive="#c9a84c" emissive-intensity="0.6"></a-cylinder>
+      <a-cylinder color="#c9a84c" radius="0.07" height="0.4" position="9 0.2 10.5"  emissive="#c9a84c" emissive-intensity="0.6"></a-cylinder>
+      <a-light type="point" color="#ffe8a0" intensity="0.6" position="-9 9.2 10.5" distance="5"></a-light>
+      <a-light type="point" color="#ffe8a0" intensity="0.6" position="9 9.2 10.5"  distance="5"></a-light>
+
+      <!-- ─────────────────────────────────────────────
+           EN-SUITE BATHROOM — Floor 2
+           Located in right-rear corner (x: 5 to 10, z: -6 to -1)
+           World space ~(5 to 10, 8.75 to 12.5, -6 to -1)
+      ───────────────────────────────────────────── -->
+      <a-entity id="ensuite-f2" position="7.5 0 -3.5">
+        <!-- Partition walls -->
+        <!-- Rear wall (shared with concrete shell at z=-6) already exists -->
+        <!-- Left dividing wall -->
+        <a-box color="#e0ddd8" width="0.12" height="3.75" depth="5" position="-2.5 1.875 0"
+               roughness="0.8" shadow="cast:true"></a-box>
+        <!-- Door opening frame (no door — open plan en-suite) -->
+        <a-box color="#c9a84c" width="0.08" height="3.75" depth="0.2" position="-2.5 1.875 2.4"
+               metalness="0.8"></a-box>
+        <a-box color="#c9a84c" width="0.08" height="0.15" depth="5.2" position="-2.5 3.75 0"
+               metalness="0.8"></a-box>
+
+        <!-- Floor — large-format white marble tiles -->
+        <a-plane color="#f0ece6" width="5" height="5" rotation="-90 0 0" position="0 0.02 0"
+                 roughness="0.15" metalness="0.1"></a-plane>
+        <!-- Tile grout lines (thin dark strips) -->
+        <a-box color="#d0ccc6" width="5" height="0.005" depth="0.03" position="0 0.025 -1" roughness="1"></a-box>
+        <a-box color="#d0ccc6" width="5" height="0.005" depth="0.03" position="0 0.025  1" roughness="1"></a-box>
+        <a-box color="#d0ccc6" width="0.03" height="0.005" depth="5" position="-1 0.025 0" roughness="1"></a-box>
+        <a-box color="#d0ccc6" width="0.03" height="0.005" depth="5" position=" 1 0.025 0" roughness="1"></a-box>
+
+        <!-- Accent floor LED strip along dividing wall -->
+        <a-box color="#c9a84c" width="0.06" height="0.01" depth="4.6" position="-2.44 0.02 0"
+               emissive="#c9a84c" emissive-intensity="0.5"></a-box>
+
+        <!-- ── DOUBLE VANITY ── -->
+        <!-- Vanity cabinet — dark wood floating -->
+        <a-box color="#1a1210" width="3.6" height="0.85" depth="0.55" position="0 0.5 -2.2"
+               roughness="0.5" metalness="0.1" shadow="cast:true"></a-box>
+        <!-- Vanity legs (floating) -->
+        <a-box color="#1a1210" width="0.06" height="0.25" depth="0.06" position="-1.6 0.12 -2.0" roughness="0.5"></a-box>
+        <a-box color="#1a1210" width="0.06" height="0.25" depth="0.06" position="1.6 0.12 -2.0"  roughness="0.5"></a-box>
+        <!-- Countertop — white marble slab -->
+        <a-box src="#tex-marble" width="3.7" height="0.06" depth="0.58" position="0 0.93 -2.2"
+               roughness="0.05" metalness="0.1"></a-box>
+        <!-- Two under-mount basins -->
+        <!-- Basin left -->
+        <a-cylinder color="#f5f5f0" radius="0.28" height="0.12" position="-0.9 0.92 -2.1"
+                    roughness="0.1" metalness="0.05"></a-cylinder>
+        <a-cylinder color="#e8e4e0" radius="0.22" height="0.1"  position="-0.9 0.88 -2.1"
+                    roughness="0.1"></a-cylinder>
+        <!-- Basin right -->
+        <a-cylinder color="#f5f5f0" radius="0.28" height="0.12" position="0.9 0.92 -2.1"
+                    roughness="0.1" metalness="0.05"></a-cylinder>
+        <a-cylinder color="#e8e4e0" radius="0.22" height="0.1"  position="0.9 0.88 -2.1"
+                    roughness="0.1"></a-cylinder>
+        <!-- Mixer taps — gold -->
+        <a-cylinder color="#c9a84c" radius="0.018" height="0.22" position="-0.9 1.07 -2.1" metalness="0.9"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.03"  height="0.04" position="-0.9 1.18 -1.95" metalness="0.9" rotation="-30 0 0"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.018" height="0.22" position="0.9 1.07 -2.1"  metalness="0.9"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.03"  height="0.04" position="0.9 1.18 -1.95"  metalness="0.9" rotation="-30 0 0"></a-cylinder>
+        <!-- Soap dispensers -->
+        <a-cylinder color="#e8e4dc" radius="0.045" height="0.14" position="-0.3 0.97 -2.05" roughness="0.5"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.02"  height="0.08" position="-0.3 1.11 -2.05" metalness="0.8"></a-cylinder>
+        <a-cylinder color="#e8e4dc" radius="0.045" height="0.14" position="0.3 0.97 -2.05"  roughness="0.5"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.02"  height="0.08" position="0.3 1.11 -2.05"  metalness="0.8"></a-cylinder>
+
+        <!-- Full-height mirror above vanity with gold frame -->
+        <a-box color="#88bbdd" opacity="0.55" width="3.5" height="1.8" depth="0.04"
+               position="0 1.95 -2.42" transparent="true" metalness="0.95" roughness="0.02"></a-box>
+        <!-- Mirror frame -->
+        <a-box color="#c9a84c" width="3.6" height="0.04" depth="0.06" position="0 2.86 -2.42" metalness="0.9"></a-box>
+        <a-box color="#c9a84c" width="3.6" height="0.04" depth="0.06" position="0 1.05 -2.42" metalness="0.9"></a-box>
+        <a-box color="#c9a84c" width="0.04" height="1.88" depth="0.06" position="-1.8 1.96 -2.42" metalness="0.9"></a-box>
+        <a-box color="#c9a84c" width="0.04" height="1.88" depth="0.06" position="1.8 1.96 -2.42"  metalness="0.9"></a-box>
+        <!-- Vanity mirror backlight (warm LED strip behind mirror) -->
+        <a-box color="#ffe8b0" width="3.4" height="0.02" depth="0.1" position="0 2.84 -2.36"
+               emissive="#ffe8b0" emissive-intensity="0.7"></a-box>
+        <a-box color="#ffe8b0" width="3.4" height="0.02" depth="0.1" position="0 1.07 -2.36"
+               emissive="#ffe8b0" emissive-intensity="0.7"></a-box>
+        <a-light type="point" color="#ffe8b0" intensity="0.9" position="0 2.0 -2.3" distance="4"></a-light>
+
+        <!-- Storage drawers handles -->
+        <a-box color="#c9a84c" width="0.8" height="0.03" depth="0.04" position="-0.9 0.65 -1.93" metalness="0.9"></a-box>
+        <a-box color="#c9a84c" width="0.8" height="0.03" depth="0.04" position="0.9 0.65 -1.93"  metalness="0.9"></a-box>
+        <a-box color="#c9a84c" width="0.8" height="0.03" depth="0.04" position="-0.9 0.35 -1.93" metalness="0.9"></a-box>
+        <a-box color="#c9a84c" width="0.8" height="0.03" depth="0.04" position="0.9 0.35 -1.93"  metalness="0.9"></a-box>
+
+        <!-- ── FREESTANDING BATHTUB ── -->
+        <!-- Tub body — oval white matte -->
+        <a-box color="#f8f6f2" width="1.9" height="0.55" depth="0.85" position="0 0.35 1.2"
+               roughness="0.15" metalness="0.05" shadow="cast:true"></a-box>
+        <!-- Tub rim -->
+        <a-box color="#f0ece8" width="2.0" height="0.06" depth="0.95" position="0 0.63 1.2"
+               roughness="0.1"></a-box>
+        <!-- Tub interior (darker) -->
+        <a-box color="#e0dcd8" width="1.7" height="0.2" depth="0.7" position="0 0.38 1.2"
+               roughness="0.2"></a-box>
+        <!-- Tub feet — gold ball feet -->
+        <a-sphere color="#c9a84c" radius="0.055" position="-0.85 0.06 0.82" metalness="0.9"></a-sphere>
+        <a-sphere color="#c9a84c" radius="0.055" position="0.85 0.06 0.82"  metalness="0.9"></a-sphere>
+        <a-sphere color="#c9a84c" radius="0.055" position="-0.85 0.06 1.58" metalness="0.9"></a-sphere>
+        <a-sphere color="#c9a84c" radius="0.055" position="0.85 0.06 1.58"  metalness="0.9"></a-sphere>
+        <!-- Freestanding tub filler tap -->
+        <a-cylinder color="#c9a84c" radius="0.022" height="0.6" position="1.08 0.6 1.05"  metalness="0.9"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.022" height="0.3" position="1.08 0.9 1.05"  metalness="0.9" rotation="0 0 -90"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.04"  height="0.06" position="0.78 0.9 1.05" metalness="0.9" rotation="90 0 0"></a-cylinder>
+        <!-- Water in tub -->
+        <a-plane color="#c8eaf5" opacity="0.55" width="1.65" height="0.68" rotation="-90 0 0"
+                 position="0 0.57 1.2" transparent="true" metalness="0.3" roughness="0.05"
+                 animation="property:material.opacity; from:0.5; to:0.65; dur:2200; dir:alternate; loop:true"></a-plane>
+
+        <!-- ── WALK-IN SHOWER ── -->
+        <!-- Shower enclosure glass (3 sides — back + two sides) -->
+        <a-box color="#88bbdd" opacity="0.22" width="1.8" height="2.5" depth="0.06"
+               position="-1.0 1.25 -0.5" transparent="true" metalness="0.9" roughness="0.05"></a-box>
+        <a-box color="#88bbdd" opacity="0.22" width="0.06" height="2.5" depth="2.2"
+               position="-1.9 1.25 -0.4" transparent="true" metalness="0.9" roughness="0.05"></a-box>
+        <!-- Glass door (slightly open) -->
+        <a-box color="#88bbdd" opacity="0.2" width="0.06" height="2.5" depth="0.9"
+               position="-1.0 1.25 0.5" transparent="true" metalness="0.9" roughness="0.05"
+               rotation="0 -25 0"></a-box>
+        <!-- Shower floor — dark slate -->
+        <a-plane color="#2a2a28" width="1.8" height="2.0" rotation="-90 0 0"
+                 position="-1.3 0.025 -0.5" roughness="0.8"></a-plane>
+        <!-- Shower drain -->
+        <a-cylinder color="#c9a84c" radius="0.06" height="0.02" position="-1.3 0.03 -0.5"
+                    rotation="-90 0 0" metalness="0.9"></a-cylinder>
+        <!-- Rainfall shower head -->
+        <a-cylinder color="#c9a84c" radius="0.25" height="0.04" position="-1.3 2.9 -0.5"
+                    metalness="0.9" roughness="0.1"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.02" height="0.4"  position="-1.3 3.1 -0.5"
+                    metalness="0.9"></a-cylinder>
+        <!-- Shower wall niche (recessed shelf) -->
+        <a-box color="#d0ccc6" width="0.5" height="0.08" depth="0.2" position="-1.88 1.6 -0.5"
+               roughness="0.3"></a-box>
+        <!-- Body jets (gold circles) -->
+        <a-cylinder color="#c9a84c" radius="0.04" height="0.04" position="-1.88 1.2 -0.2"
+                    rotation="0 90 0" metalness="0.9"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.04" height="0.04" position="-1.88 1.0 -0.2"
+                    rotation="0 90 0" metalness="0.9"></a-cylinder>
+        <!-- Glass frame channels gold -->
+        <a-box color="#c9a84c" width="0.04" height="2.55" depth="0.06" position="-0.1 1.27 -0.5" metalness="0.9"></a-box>
+        <a-box color="#c9a84c" width="0.04" height="2.55" depth="0.06" position="-1.9 1.27 -0.5" metalness="0.9"></a-box>
+        <a-box color="#c9a84c" width="1.85" height="0.04" depth="0.06" position="-1.0 2.55 -0.5" metalness="0.9"></a-box>
+        <!-- Shower light -->
+        <a-cylinder color="#fff8e8" radius="0.08" height="0.04" position="-1.3 2.85 -0.5"
+                    emissive="#fff8e8" emissive-intensity="1"></a-cylinder>
+        <a-light type="point" color="#fff5e0" intensity="0.6" position="-1.3 2.7 -0.5" distance="3"></a-light>
+
+        <!-- ── TOILET ── -->
+        <!-- Toilet — wall-hung, white ceramic -->
+        <!-- Pan -->
+        <a-box color="#f5f5f0" width="0.55" height="0.34" depth="0.65" position="1.7 0.42 -1.8"
+               roughness="0.1" shadow="cast:true"></a-box>
+        <!-- Cistern (wall-hung concealed — just a panel) -->
+        <a-box color="#e8e4e0" width="0.6" height="0.7" depth="0.12" position="1.7 1.05 -2.38"
+               roughness="0.3"></a-box>
+        <!-- Flush button (gold) -->
+        <a-cylinder color="#c9a84c" radius="0.04" height="0.02" position="1.7 1.4 -2.32"
+                    metalness="0.9"></a-cylinder>
+        <!-- Seat lid -->
+        <a-box color="#f0ece8" width="0.5" height="0.04" depth="0.6" position="1.7 0.6 -1.8"
+               roughness="0.15"></a-box>
+        <!-- Chrome roll holder -->
+        <a-cylinder color="#c9a84c" radius="0.025" height="0.25" position="2.06 0.75 -2.0"
+                    rotation="90 0 0" metalness="0.9"></a-cylinder>
+        <!-- Roll of paper -->
+        <a-cylinder color="#f0ece4" radius="0.06" height="0.2" position="2.06 0.75 -2.0"
+                    rotation="90 0 0" roughness="0.9"></a-cylinder>
+        <!-- Toilet brush holder -->
+        <a-cylinder color="#c9a84c" radius="0.055" height="0.22" position="2.1 0.11 -1.45"
+                    metalness="0.8"></a-cylinder>
+        <a-cylinder color="#e8e4dc" radius="0.04" height="0.3" position="2.1 0.36 -1.45"
+                    roughness="0.7"></a-cylinder>
+
+        <!-- ── HEATED TOWEL RAIL ── -->
+        <a-cylinder color="#c9a84c" radius="0.018" height="1.2" position="2.38 1.4 -2.1"
+                    metalness="0.9"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.018" height="1.2" position="2.38 1.4 -1.85"
+                    metalness="0.9"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.018" height="0.25" position="2.38 0.85 -1.975"
+                    rotation="90 0 0" metalness="0.9"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.018" height="0.25" position="2.38 1.15 -1.975"
+                    rotation="90 0 0" metalness="0.9"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.018" height="0.25" position="2.38 1.45 -1.975"
+                    rotation="90 0 0" metalness="0.9"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.018" height="0.25" position="2.38 1.75 -1.975"
+                    rotation="90 0 0" metalness="0.9"></a-cylinder>
+        <a-cylinder color="#c9a84c" radius="0.018" height="0.25" position="2.38 2.0 -1.975"
+                    rotation="90 0 0" metalness="0.9"></a-cylinder>
+        <!-- Towel draped (cream) -->
+        <a-box color="#f0ece2" width="0.02" height="0.65" depth="0.22" position="2.38 1.35 -1.975"
+               roughness="0.9" opacity="0.9" transparent="true"></a-box>
+
+        <!-- Ceiling — backlit panel (soft glow) -->
+        <a-box color="#fff8f0" width="4.8" height="0.06" depth="4.8" position="0 3.72 0"
+               emissive="#fff8f0" emissive-intensity="0.15"></a-box>
+        <!-- Main ceiling light -->
+        <a-cylinder color="#fff5e0" radius="0.2" height="0.05" position="0 3.72 0"
+                    emissive="#fff5e0" emissive-intensity="0.9"></a-cylinder>
+        <a-light type="point" color="#fff5e0" intensity="1.6" position="0 3.5 0" distance="10"></a-light>
+        <!-- Warm accent strip along vanity ceiling -->
+        <a-box color="#ffe8b0" width="3.6" height="0.02" depth="0.1" position="0 3.72 -2.0"
+               emissive="#ffe8b0" emissive-intensity="0.5"></a-box>
+      </a-entity>
+
+    </a-entity>
+    <!-- end floor2 -->
+
+  </a-scene>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+      const player = document.getElementById('player');
+
+      const floors = {
+        f0: { pos: { x: 0,  y: 1.6,  z: 4  }, label: 'Ground Floor' },
+        f1: { pos: { x: -4, y: 6.1,  z: 2  }, label: 'Floor 1'      },
+        f2: { pos: { x: -5, y: 10.4, z: -1 }, label: 'Floor 2'      }
+      };
+
+      ['f0','f1','f2'].forEach(id => {
+        const btn = document.getElementById('btn-' + id);
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          player.setAttribute('position', floors[id].pos);
+          document.querySelectorAll('.floor-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+      });
+
+    });
+
+    AFRAME.registerComponent('room-label', {
+      init: function () {
+        this.labelEl  = document.getElementById('room-label');
+        this.lastRoom = '';
+      },
+      tick: function () {
+        const pos  = this.el.getAttribute('position');
+        const room = this.getRoom(pos);
+        if (room !== this.lastRoom) {
+          this.labelEl.textContent = room;
+          this.lastRoom = room;
+        }
+      },
+      getRoom: function (pos) {
+        const x = pos.x, y = pos.y, z = pos.z;
+        if (y > 9.5) {
+          if (x > 4 && z < -1)   return 'En-Suite Bathroom';
+          if (x > 3)              return 'Bar Lounge';
+          if (z > 6)              return 'Terrace';
+          return 'Lounge';
+        }
+        if (y > 5.2) {
+          if (z > 6)              return 'Balcony';
+          if (x < -5 && z < -2)  return 'Walk-in Closet';
+          if (x > 1)              return 'Second Bedroom';
+          return 'Master Bedroom';
+        }
+        if (z > 20)                        return 'Fire Pit Lounge';
+        if (z > 10 && z <= 20)             return 'Pool Deck';
+        if (x > 8 && z > -2 && z < 8)     return 'Garage';
+        if (x < 0 && z >= -6 && z <= 6)   return 'Living Room';
+        if (x >= 0 && z >= -6 && z <= 6)  return 'Kitchen & Dining';
+        return 'Exterior';
+      }
+    });
+  </script>
+
+</body>
+</html>
